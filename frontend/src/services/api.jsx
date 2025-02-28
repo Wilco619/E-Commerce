@@ -4,7 +4,6 @@ import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
 const apiUrl = "http://localhost:8000/api/";
 // Base URL with /api/ prefix to match Django router patterns
 
-
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : apiUrl,
   timeout: 10000,
@@ -76,10 +75,8 @@ API.interceptors.response.use(
 );
 
 // Auth API Services
-// Enhanced authAPI with logging
 const authAPI = {
-  baseURL: API.defaults.baseURL, // Store the base URL for logging purposes
-  
+  baseURL: API.defaults.baseURL,  
   register: (userData) => {
     console.log('Register endpoint:', `${API.defaults.baseURL}/register/`);
     console.log('Register payload:', userData);
@@ -113,16 +110,13 @@ const authAPI = {
     // Make the API call
     return API.post('/login/', credentials)
       .finally(() => {
-        // Remove the interceptor after the call
+        // Eject the interceptor after the request is complete
         API.interceptors.response.eject(interceptor);
       });
   },
   
-  verifyOTP: (otpData) => {
-    console.log('Verify OTP endpoint:', `${API.defaults.baseURL}/verify-otp/`);
-    console.log('OTP payload:', otpData);
-    return API.post('/verify-otp/', otpData);
-  },
+  verifyOTP: (otpData) => API.post('/verify-otp/', otpData),
+  resendOTP: (otpData) => API.post('/resend-otp/', otpData),
   
   logout: (refreshToken) => API.post('/logout/', { refresh: refreshToken }),
   changePassword: (passwords) => API.post('/change-password/', passwords),
@@ -142,32 +136,12 @@ const productsAPI = {
 
 // Cart API Services
 const cartAPI = {
-  // Replace the getCart method:
-  getCart: () => {
-    // For authenticated users, this just works with the token
-    // For guest users, we need to create or get a cart with session ID
-    const sessionId = localStorage.getItem('cart_session_id') || 
-                      Math.random().toString(36).substring(2, 15);
-    
-    // Store the session ID if not exist
-    if (!localStorage.getItem('cart_session_id')) {
-      localStorage.setItem('cart_session_id', sessionId);
-    }
-    
-    // Create or get a cart
-    return API.post('/carts/create_or_get/', { 
-      session_id: sessionId 
-    });
-  },
-
-  addToCart: (cartId, productData) => API.post(`/carts/${cartId}/add_item/`, productData),
-  removeFromCart: (cartId, cartItemId) => API.post(`/carts/${cartId}/remove_item/`, { cart_item_id: cartItemId }),
-  updateCartItem: (cartId, cartItemId, quantity) => 
-    API.post(`/carts/${cartId}/update_item/`, { cart_item_id: cartItemId, quantity }),
+  getCart: () => API.get('/carts/'),
+  createCart: () => API.post('/carts/'),
+  addToCart: (cartId, productId, quantity) => API.post(`/carts/${cartId}/add_item/`, { product_id: productId, quantity }),
+  removeFromCart: (cartId, cartItemId) => API.post(`/carts/${cartId}/remove_item/`, { cart_item_id: cartItemId }), // Changed to POST
+  updateCartItem: (cartId, cartItemId, quantity) => API.post(`/carts/${cartId}/update_item/`, { cart_item_id: cartItemId, quantity }),
   clearCart: (cartId) => API.post(`/carts/${cartId}/clear/`),
-  
-  // Add method to merge guest cart with user cart after login
-  mergeCart: (cartId, sessionId) => API.post(`/carts/${cartId}/merge/`, { session_id: sessionId }),
 };
 
 // Order API Services
@@ -188,17 +162,18 @@ const adminAPI = {
   createCategory: (categoryData) => API.post('/categories/', categoryData),
   updateCategory: (slug, categoryData) => API.put(`/categories/${slug}/`, categoryData),
   deleteCategory: (slug) => API.delete(`/categories/${slug}/`),
-  
-  // Order management
+  getCategories: () => {
+    console.log('Fetching categories from:', `${API.defaults.baseURL}/categories/`);
+    return API.get('/categories/').catch(error => {
+      console.error('Categories fetch error details:', error.response || error);
+      throw error;
+    });
+  }, // Ensure this endpoint is correct
+
+  // Order management - Using the existing orders endpoints
   getAllOrders: () => API.get('/orders/'),
-  updateOrderStatus: (id, statusData) => API.patch(`/orders/${id}/update_status/`, statusData),
-  
-  // User management - these may need to be updated since we don't have a UserViewSet
-  // You'll need to add these endpoints to your views and URLs
-  // getAllUsers: () => API.get('/users/'),
-  // getUserDetails: (id) => API.get(`/users/${id}/`),
-  // updateUser: (id, userData) => API.patch(`/users/${id}/`, userData),
-  // deleteUser: (id) => API.delete(`/users/${id}/`),
+  getOrder: (id) => API.get(`/orders/${id}/`),
+  updateOrderStatus: (orderId, statusData) => API.post(`/orders/${orderId}/update_status/`, statusData),
 };
 
 export { API, authAPI, productsAPI, cartAPI, orderAPI, adminAPI };

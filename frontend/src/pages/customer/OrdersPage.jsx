@@ -53,14 +53,18 @@ const getStatusColor = (status) => {
 // Order row component with expandable details
 const OrderRow = ({ order }) => {
   const [open, setOpen] = useState(false);
+  const navigate = useNavigate();
   
   return (
     <>
-      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }}>
+      <TableRow sx={{ '& > *': { borderBottom: 'unset' } }} onClick={() => navigate(`/orders/${order.id}`)} style={{ cursor: 'pointer' }}>
         <TableCell>
           <IconButton
             size="small"
-            onClick={() => setOpen(!open)}
+            onClick={(e) => {
+              e.stopPropagation();
+              setOpen(!open);
+            }}
           >
             {open ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
           </IconButton>
@@ -192,7 +196,7 @@ const OrdersPage = () => {
     try {
       setLoading(true);
       const response = await orderAPI.getOrders();
-      setOrders(response.data);
+      setOrders(response.data.results); // Ensure to set the orders from results
       setLoading(false);
     } catch (err) {
       console.error('Error fetching orders:', err);

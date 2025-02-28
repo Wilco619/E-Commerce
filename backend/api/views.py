@@ -56,7 +56,8 @@ class UserRegistrationView(GenericAPIView):
             user = CustomUser.objects.create_user(
                 username=validated_data['username'],
                 email=validated_data['email'],
-                password=validated_data['password']
+                password=validated_data['password'],
+                user_type='CUSTOMER'  # Set user_type to CUSTOMER
             )
             
             # Update additional fields if present
@@ -441,39 +442,18 @@ class ProductViewSet(viewsets.ModelViewSet):
 
 class CartViewSet(viewsets.ModelViewSet):
     serializer_class = CartSerializer
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
-        if self.request.user.is_authenticated:
-            return Cart.objects.filter(user=self.request.user)
-        
-        # For guest users, return carts linked to their session
-        session_id = self.request.query_params.get('session_id')
-        if session_id:
-            return Cart.objects.filter(session_id=session_id)
-        return Cart.objects.none()
+        return Cart.objects.filter(user=self.request.user)
     
-    def get_permissions(self):
-        if self.action in ['create', 'create_or_get']:
-            return [permissions.AllowAny()]
-        return [permissions.IsAuthenticated()]
-    
-    @action(detail=False, methods=['post'])
-    def create_or_get(self, request):
-        session_id = request.data.get('session_id')
-        if not session_id:
-            return Response({"error": "Session ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        if request.user.is_authenticated:
-            cart, created = Cart.objects.get_or_create(user=request.user)
-        else:
-            carts = Cart.objects.filter(session_id=session_id)
-            if carts.exists():
-                cart = carts.first()
-            else:
-                cart = Cart.objects.create(session_id=session_id)
-        
-        serializer = CartSerializer(cart)
-        return Response(serializer.data)
+    def perform_create(self, serializer):
+        # Check if user already has a cart
+        try:
+            cart = Cart.objects.get(user=self.request.user)
+            return Response({"error": "User already has a cart"}, status=status.HTTP_400_BAD_REQUEST)
+        except Cart.DoesNotExist:
+            serializer.save(user=self.request.user)
     
     @action(detail=True, methods=['post'])
     def add_item(self, request, pk=None):
@@ -489,8 +469,10 @@ class CartViewSet(viewsets.ModelViewSet):
             cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
             if not created:
                 cart_item.quantity += int(quantity)
+            else:
+                cart_item.quantity = int(quantity)
             cart_item.save()
-            serializer = CartItemSerializer(cart_item)
+            serializer = CartSerializer(cart)
             return Response(serializer.data)
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -508,7 +490,8 @@ class CartViewSet(viewsets.ModelViewSet):
         try:
             cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
             cart_item.delete()
-            return Response({"message": "Item removed"}, status=status.HTTP_204_NO_CONTENT)
+            serializer = CartSerializer(cart)
+            return Response(serializer.data)
         except CartItem.DoesNotExist:
             return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
     
@@ -525,7 +508,7 @@ class CartViewSet(viewsets.ModelViewSet):
             cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
             cart_item.quantity = int(quantity)
             cart_item.save()
-            serializer = CartItemSerializer(cart_item)
+            serializer = CartSerializer(cart)
             return Response(serializer.data)
         except CartItem.DoesNotExist:
             return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
@@ -538,56 +521,16 @@ class CartViewSet(viewsets.ModelViewSet):
         cart.items.all().delete()
         serializer = CartSerializer(cart)
         return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def merge(self, request, pk=None):
-        """Merge guest cart with user cart after login"""
-        if not request.user.is_authenticated:
-            return Response({"error": "User must be authenticated"}, status=status.HTTP_401_UNAUTHORIZED)
-        
-        user_cart, created = Cart.objects.get_or_create(user=request.user)
-        session_id = request.data.get('session_id')
-        
-        if not session_id:
-            return Response({"error": "Session ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            guest_cart = Cart.objects.get(session_id=session_id)
-            
-            # Transfer items from guest cart to user cart
-            for item in guest_cart.items.all():
-                user_cart_item, created = CartItem.objects.get_or_create(cart=user_cart, product=item.product)
-                if not created:
-                    user_cart_item.quantity += item.quantity
-                user_cart_item.save()
-            
-            # Delete the guest cart
-            guest_cart.delete()
-            
-            serializer = CartSerializer(user_cart)
-            return Response(serializer.data)
-        except Cart.DoesNotExist:
-            return Response({"error": "Guest cart not found"}, status=status.HTTP_404_NOT_FOUND)
 
 class OrderViewSet(viewsets.ModelViewSet):
     serializer_class = OrderSerializer
-    
-    def get_permissions(self):
-        if self.action == 'create':
-            permission_classes = [permissions.AllowAny]
-        elif self.action in ['retrieve', 'list']:
-            permission_classes = [permissions.IsAuthenticated, IsOwnerOrAdmin]
-        else:
-            permission_classes = [permissions.IsAdminUser]
-        return [permission() for permission in permission_classes]
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_queryset(self):
         user = self.request.user
-        if user.is_authenticated:
-            if user.is_staff:
-                return Order.objects.all()
-            return Order.objects.filter(user=user)
-        return Order.objects.none()
+        if user.is_staff:
+            return Order.objects.all()
+        return Order.objects.filter(user=user)
     
     def get_serializer_class(self):
         if self.action == 'create' or self.action == 'checkout':
@@ -596,9 +539,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def checkout(self, request):
-        serializer = CheckoutSerializer(data=request.data)
+        serializer = CheckoutSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            order = serializer.save()
+            # Ensure the user is assigned to the order
+            order = serializer.save(user=request.user)
             order_serializer = OrderSerializer(order)
             return Response(order_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -630,3 +574,34 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.save()
         serializer = OrderSerializer(order)
         return Response(serializer.data)
+
+class ResendOTPView(GenericAPIView):
+    permission_classes = (AllowAny,)
+    serializer_class = OTPSerializer
+
+    def post(self, request, *args, **kwargs):
+        user_id = request.data.get('user_id')
+        if not user_id:
+            return Response({"error": "User ID is required"}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            user = CustomUser.objects.get(id=user_id)
+            otp = user.generate_otp()
+            
+            # Send the OTP
+            if settings.SEND_OTP_VIA_EMAIL:
+                send_mail(
+                    'Your OTP Code',
+                    f'Your OTP code is {otp}',
+                    settings.DEFAULT_FROM_EMAIL,
+                    [user.email],
+                    fail_silently=False,
+                )
+            else:
+                print(f'{user.email} Your OTP code is {otp}')
+            
+            return Response({"message": "OTP resent successfully"}, status=status.HTTP_200_OK)
+        except CustomUser.DoesNotExist:
+            return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

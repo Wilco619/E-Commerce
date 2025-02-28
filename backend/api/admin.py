@@ -38,7 +38,7 @@ class OrderItemInline(admin.TabularInline):
 # Category Admin
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'is_active', 'created_at')
+    list_display = ('name', 'slug', 'is_active')
     list_filter = ('is_active',)
     search_fields = ('name', 'description')
     prepopulated_fields = {'slug': ('name',)}
@@ -55,7 +55,7 @@ class ProductAdmin(admin.ModelAdmin):
 # Cart Admin
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'session_id', 'total_price', 'total_items', 'created_at')
+    list_display = ('id', 'user', 'total_price', 'total_items', 'created_at')
     search_fields = ('user__username', 'session_id')
     inlines = [CartItemInline]
 

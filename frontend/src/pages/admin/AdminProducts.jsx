@@ -41,6 +41,7 @@ const AdminProducts = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState(null);
+  const [totalProducts, setTotalProducts] = useState(0);
   
   const navigate = useNavigate();
 
@@ -65,8 +66,9 @@ const AdminProducts = () => {
     try {
       setLoading(true);
       const response = await productsAPI.getProducts();
-      setProducts(response.data);
-      setFilteredProducts(response.data);
+      setProducts(response.data.results); // Extract products from results
+      setFilteredProducts(response.data.results); // Extract products from results
+      setTotalProducts(response.data.count); // Set total number of products
       setLoading(false);
     } catch (err) {
       console.error("Error fetching products:", err);
@@ -117,7 +119,7 @@ const AdminProducts = () => {
   };
 
   const handleAddProduct = () => {
-    navigate('/admin/products/add');
+    navigate('/admin/products/new');
   };
 
   const handleEditProduct = (slug) => {
@@ -176,17 +178,17 @@ const AdminProducts = () => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {filteredProducts
+              {Array.isArray(filteredProducts) && filteredProducts
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>{product.id}</TableCell>
                     <TableCell>{product.name}</TableCell>
                     <TableCell>{product.category_name}</TableCell>
-                    <TableCell>${parseFloat(product.price).toFixed(2)}</TableCell>
+                    <TableCell>Ksh{parseFloat(product.price).toFixed(2)}</TableCell>
                     <TableCell>
                       {product.discount_price ? 
-                        `$${parseFloat(product.discount_price).toFixed(2)}` : 
+                        `Ksh${parseFloat(product.discount_price).toFixed(2)}` : 
                         '-'}
                     </TableCell>
                     <TableCell>{product.stock || 0}</TableCell>
@@ -225,7 +227,7 @@ const AdminProducts = () => {
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component="div"
-            count={filteredProducts.length}
+            count={totalProducts} // Use totalProducts state
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handleChangePage}

@@ -44,13 +44,13 @@ const CartPage = () => {
       let response = await cartAPI.getCart();
       
       // If no cart exists, create one
-      if (response.data.length === 0) {
+      if (response.data.results.length === 0) {
         response = await cartAPI.createCart();
+        setCart(response.data);
       } else {
-        response = { data: response.data[0] }; // Take the first cart
+        setCart(response.data.results[0]); // Take the first cart
       }
       
-      setCart(response.data);
       setLoading(false);
     } catch (err) {
       console.error('Error fetching cart:', err);
@@ -162,7 +162,7 @@ const CartPage = () => {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      ${item.product.discount_price ?? item.product.price}
+                      Ksh {item.product.discount_price ?? item.product.price}
                     </TableCell>
                     <TableCell align="center">
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -192,14 +192,14 @@ const CartPage = () => {
                         </IconButton>
                       </Box>
                     </TableCell>
-                    <TableCell align="right">${item.total_price}</TableCell>
+                    <TableCell align="right">Ksh {item.total_price}</TableCell>
                     <TableCell align="center">
-                      <IconButton 
-                        color="error" 
-                        onClick={() => handleRemoveItem(item.id)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                                        <IconButton 
+                                          color="error" 
+                                          onClick={() => handleRemoveItem(item.id)}
+                                        >
+                                          <DeleteIcon />
+                                        </IconButton>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -225,7 +225,7 @@ const CartPage = () => {
                 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                   <Typography>Subtotal ({cart.total_items} items):</Typography>
-                  <Typography fontWeight="bold">${cart.total_price}</Typography>
+                  <Typography fontWeight="bold">Ksh {cart.total_price}</Typography>
                 </Box>
                 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
@@ -237,7 +237,7 @@ const CartPage = () => {
                 
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
                   <Typography variant="h6">Total:</Typography>
-                  <Typography variant="h6" color="primary">${cart.total_price}</Typography>
+                  <Typography variant="h6" color="primary">Ksh {cart.total_price}</Typography>
                 </Box>
                 
                 <Button 

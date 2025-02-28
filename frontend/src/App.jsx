@@ -26,7 +26,7 @@ import AdminCategories from './pages/admin/AdminCategories';
 import AdminCategoryForm from './pages/admin/AdminCategoryForm';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminOrderDetail from './pages/admin/AdminOrderDetails';
-import OTPVerification from './pages/OTPverification';
+import OTPVerification from './pages/OTPVerification';
 import PasswordChange from './pages/PasswordChange';
 
 const AppRoutes = () => {

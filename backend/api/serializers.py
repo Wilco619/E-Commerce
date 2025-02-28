@@ -198,13 +198,12 @@ class ProductImageSerializer(serializers.ModelSerializer):
         fields = ('id', 'image', 'is_feature')
 
 class ProductListSerializer(serializers.ModelSerializer):
-    category_name = serializers.ReadOnlyField(source='category.name')
+    category_name = serializers.CharField(source='category.name', read_only=True)
     feature_image = serializers.SerializerMethodField()
     
     class Meta:
         model = Product
-        fields = ('id', 'name', 'slug', 'category_name', 'price', 'discount_price', 
-                  'is_available', 'feature_image')
+        fields = '__all__'
     
     def get_feature_image(self, obj):
         feature_image = obj.images.filter(is_feature=True).first()
@@ -218,19 +217,14 @@ class ProductDetailSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Product
-        fields = ('id', 'name', 'slug', 'category', 'description', 'price', 
-                  'discount_price', 'stock', 'is_available', 'images', 
-                  'created_at', 'updated_at')
+        fields = '__all__'
 
 class CategorySerializer(serializers.ModelSerializer):
-    products_count = serializers.SerializerMethodField()
-    
     class Meta:
         model = Category
-        fields = ('id', 'name', 'slug', 'description', 'is_active', 'products_count')
-    
-    def get_products_count(self, obj):
-        return obj.products.count()
+        fields = '__all__'
+
+
 
 class CategoryDetailSerializer(serializers.ModelSerializer):
     products = ProductListSerializer(many=True, read_only=True)
@@ -279,31 +273,32 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only_fields = ('order_total', 'order_status', 'payment_status', 'tracking_number')
 
 class CheckoutSerializer(serializers.ModelSerializer):
-    cart_id = serializers.IntegerField(write_only=True)
-    
     class Meta:
         model = Order
-        fields = ('cart_id', 'full_name', 'email', 'phone_number', 'address', 'city', 
-                  'postal_code', 'country', 'order_notes', 'payment_method')
+        exclude = ['user']  # exclude user field as it's set in the view
     
     def create(self, validated_data):
-        cart_id = validated_data.pop('cart_id')
+        request = self.context.get('request')
+        user = request.user if request.user.is_authenticated else None
+        
+        # Get user's cart
         try:
-            cart = Cart.objects.get(id=cart_id)
+            cart = Cart.objects.get(user=user)
         except Cart.DoesNotExist:
-            raise serializers.ValidationError("Cart not found")
+            raise serializers.ValidationError("No cart found for this user")
         
         if cart.items.count() == 0:
             raise serializers.ValidationError("Cart is empty")
         
         # Create order
-        order = Order.objects.create(
-            user=cart.user,
-            order_total=cart.total_price,
+        order_data = {
+            'user': user,
+            'order_total': cart.total_price,
             **validated_data
-        )
+        }
+        order = Order.objects.create(**order_data)
         
-        # Create order items
+        # Create order items from cart items
         for cart_item in cart.items.all():
             OrderItem.objects.create(
                 order=order,
@@ -313,7 +308,7 @@ class CheckoutSerializer(serializers.ModelSerializer):
                 total=cart_item.total_price
             )
         
-        # Clear cart
+        # Clear the cart
         cart.items.all().delete()
         
         return order

@@ -3,7 +3,7 @@ import {
   Container, Typography, Paper, Table, TableBody, TableCell, 
   TableContainer, TableHead, TableRow, IconButton, Button,
   Dialog, DialogActions, DialogContent, DialogContentText,
-  DialogTitle, TextField, CircularProgress, Chip, Box, Snackbar,
+  DialogTitle, CircularProgress, Chip, Box, Snackbar,
   Alert, TablePagination
 } from '@mui/material';
 import { Add, Edit, Delete } from '@mui/icons-material';
@@ -18,6 +18,7 @@ const AdminCategories = () => {
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [totalCategories, setTotalCategories] = useState(0);
 
   useEffect(() => {
     fetchCategories();
@@ -27,7 +28,8 @@ const AdminCategories = () => {
     setLoading(true);
     try {
       const response = await adminAPI.getCategories();
-      setCategories(response.data);
+      setCategories(response.data.results); // Extract categories from results
+      setTotalCategories(response.data.count); // Set total number of categories
     } catch (error) {
       console.error('Error fetching categories:', error);
       showAlert('Failed to load categories', 'error');
@@ -108,7 +110,7 @@ const AdminCategories = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {categories
+                {Array.isArray(categories) && categories
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((category) => (
                     <TableRow key={category.id}>
@@ -148,7 +150,7 @@ const AdminCategories = () => {
           <TablePagination
             rowsPerPageOptions={[5, 10, 25]}
             component="div"
-            count={categories.length}
+            count={totalCategories} // Use totalCategories state
             rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={handlePageChange}

@@ -15,7 +15,7 @@ export const ProtectedRoute = () => {
     );
   }
   
-  return isAuthenticated() ? <Outlet /> : <Navigate to="/login" />;
+  return isAuthenticated ? <Outlet /> : <Navigate to="/login" />;
 };
 
 export const AdminRoute = () => {
@@ -29,5 +29,5 @@ export const AdminRoute = () => {
     );
   }
   
-  return isAdmin() ? <Outlet /> : <Navigate to="/" />;
+  return isAdmin ? <Outlet /> : <Navigate to="/" />;
 };

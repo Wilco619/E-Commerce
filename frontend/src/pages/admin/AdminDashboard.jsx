@@ -12,7 +12,10 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  ListItemButton
+  ListItemButton,
+  CircularProgress,
+  Alert,
+  Button
 } from '@mui/material';
 import { 
   PieChart as PieChartIcon, 
@@ -21,7 +24,8 @@ import {
   People as PeopleIcon,
   AttachMoney as MoneyIcon
 } from '@mui/icons-material';
-import { adminAPI, orderAPI, productsAPI } from '../../services/api';
+import { Link as RouterLink } from 'react-router-dom';
+import { adminAPI } from '../../services/api';
 
 const AdminDashboard = () => {
   const [stats, setStats] = useState({
@@ -35,57 +39,46 @@ const AdminDashboard = () => {
   const [recentOrders, setRecentOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
-        setLoading(true);
-        
-        // Fetch orders
-        const ordersResponse = await orderAPI.getOrders();
-        const orders = ordersResponse.data;
-        
-        // Fetch products
-        const productsResponse = await productsAPI.getProducts();
-        const products = productsResponse.data;
-        
-        // Calculate dashboard stats
-        const pendingOrders = orders.filter(order => 
-          order.order_status === 'PENDING' || order.order_status === 'PROCESSING'
-        );
-        
-        const lowStockProducts = products.filter(product => 
-          product.stock < 10 && product.is_available
-        );
-        
-        const totalRevenue = orders
-          .filter(order => order.payment_status === 'COMPLETED')
-          .reduce((sum, order) => sum + parseFloat(order.order_total), 0);
-        
-        setStats({
-          totalOrders: orders.length,
-          pendingOrders: pendingOrders.length,
-          totalProducts: products.length,
-          lowStockProducts: lowStockProducts.length,
-          totalRevenue: totalRevenue
+        const { data } = await adminAPI.getDashboardData();
+          setStats({
+          totalOrders: data.stats.totalOrders || 0,
+          pendingOrders: data.stats.pendingOrders || 0,
+          totalProducts: data.stats.totalProducts || 0,
+          lowStockProducts: data.stats.lowStockProducts || 0,
+          totalRevenue: data.stats.totalRevenue || 0
         });
-        
-        // Get recent orders
-        setRecentOrders(orders.slice(0, 5));
-        setLoading(false);
+        setRecentOrders(Array.isArray(data.recentOrders) ? data.recentOrders : []);
       } catch (err) {
-        console.error("Error fetching dashboard data:", err);
-        setError("Failed to load dashboard data. Please try again.");
+        console.error('Error fetching dashboard data:', err);
+        setError('Failed to load dashboard data');
+      } finally {
         setLoading(false);
       }
     };
-    
+
     fetchDashboardData();
   }, []);
-  
-  if (loading) return <Typography>Loading dashboard...</Typography>;
-  if (error) return <Typography color="error">{error}</Typography>;
-  
+
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+
+  if (error) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <Alert severity="error">{error}</Alert>
+      </Box>
+    );
+  }
+
   return (
     <Container maxWidth="lg">
       <Box sx={{ my: 4 }}>
@@ -128,7 +121,7 @@ const AdminDashboard = () => {
               <CardContent>
                 <MoneyIcon color="primary" />
                 <Typography variant="h5" component="div">
-                  ${stats.totalRevenue.toFixed(2)}
+                  Ksh{stats.totalRevenue.toFixed(2)}
                 </Typography>
                 <Typography color="text.secondary">
                   Revenue
@@ -205,6 +198,25 @@ const AdminDashboard = () => {
             </Paper>
           </Grid>
         </Grid>
+        <Box sx={{ mt: 4 }}>
+          <Button
+            component={RouterLink}
+            to="/admin/products/new"
+            variant="contained"
+            color="primary"
+            sx={{ mr: 2 }}
+          >
+            Add New Product
+          </Button>
+          <Button
+            component={RouterLink}
+            to="/admin/categories/new"
+            variant="contained"
+            color="secondary"
+          >
+            Add New Category
+          </Button>
+        </Box>
       </Box>
     </Container>
   );

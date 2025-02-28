@@ -15,7 +15,8 @@ const AdminCategoryForm = () => {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    is_active: true
+    is_active: true,
+    slug: '', // Add slug field
   });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -68,6 +69,13 @@ const AdminCategoryForm = () => {
     return Object.keys(newErrors).length === 0;
   };
 
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     
@@ -77,11 +85,16 @@ const AdminCategoryForm = () => {
     
     setSaving(true);
     try {
+      const categoryData = {
+        ...formData,
+        slug: generateSlug(formData.name),
+      };
+      
       if (isEditMode) {
-        await adminAPI.updateCategory(slug, formData);
+        await adminAPI.updateCategory(slug, categoryData);
         showAlert('Category updated successfully', 'success');
       } else {
-        await adminAPI.createCategory(formData);
+        await adminAPI.createCategory(categoryData);
         showAlert('Category created successfully', 'success');
         // Redirect to categories list after a short delay
         setTimeout(() => navigate('/admin/categories'), 1500);

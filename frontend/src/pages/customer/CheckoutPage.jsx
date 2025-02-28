@@ -56,7 +56,7 @@ const CheckoutPage = () => {
       try {
         setLoading(true);
         const response = await cartAPI.getCart();
-        setCart(response.data);
+        setCart(response.data.results[0]); // Ensure to set the first cart from results
       } catch (err) {
         setError('Failed to load your cart. Please try again.');
         console.error('Error fetching cart:', err);
@@ -113,7 +113,8 @@ const CheckoutPage = () => {
       setLoading(true);
       const orderData = {
         ...formData,
-        cart_id: cart.id
+        cart_id: cart.id,
+        order_total: cart.total_price // Include the order_total field
       };
       
       const response = await orderAPI.checkout(orderData);
@@ -249,7 +250,7 @@ const CheckoutPage = () => {
   );
 
   const renderOrderSummary = () => {
-    if (!cart) return <Typography>Loading cart data...</Typography>;
+    if (!cart || !cart.items) return <Typography>Loading cart data...</Typography>;
     
     return (
       <Box>
@@ -355,7 +356,7 @@ const CheckoutPage = () => {
     );
   }
 
-  if (cart && cart.items.length === 0) {
+  if (cart && cart.items && cart.items.length === 0) {
     return (
       <Container maxWidth="md" sx={{ my: 4 }}>
         <Alert severity="info">Your cart is empty. Add some products before checkout.</Alert>

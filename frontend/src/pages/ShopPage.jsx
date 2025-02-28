@@ -1,53 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import {
-  Container,
-  Grid,
-  Card,
-  CardMedia,
-  CardContent,
-  CardActions,
-  Typography,
-  Box,
-  Button,
-  TextField,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Pagination,
-  Drawer,
-  List,
-  ListItem,
-  ListItemText,
-  Divider,
-  Checkbox,
-  FormControlLabel,
-  Slider,
-  IconButton,
-  CircularProgress,
-  Breadcrumbs,
-  Link,
-  Paper,
-  Chip
+import { 
+  Container, Box, Typography, Button, Paper, Grid, TextField, InputAdornment, IconButton, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox, Slider, Drawer, List, ListItem, Chip, CircularProgress, Pagination, Breadcrumbs, Link, Card, CardMedia, CardContent, CardActions 
 } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
-import { productsAPI, cartAPI } from '../services/api';
-import SearchIcon from '@mui/icons-material/Search';
-import FilterListIcon from '@mui/icons-material/FilterList';
-import CloseIcon from '@mui/icons-material/Close';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
-import FavoriteIcon from '@mui/icons-material/Favorite';
-import FavoriteBorderIcon from "@mui/icons-material/FavoriteBorder";
+import { useLocation, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../authentication/AuthContext';
 import { useCart } from '../authentication/CartContext';
 import { useSnackbar } from 'notistack';
-
+import { productsAPI } from '../services/api';
+import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, AddShoppingCart as AddShoppingCartIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, NavigateNext as NavigateNextIcon } from '@mui/icons-material';
+import { Divider } from '@mui/material';
 
 const ShopPage = () => {
-  
   const location = useLocation();
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
@@ -81,60 +44,41 @@ const ShopPage = () => {
     const fetchCategories = async () => {
       try {
         const response = await productsAPI.getCategories();
-        // Make sure categories is always an array
-        setCategories(Array.isArray(response.data) ? response.data : []);
-      } catch (err) {
-        console.error('Error fetching categories:', err);
-        setCategories([]); // Set to empty array on error
+        setCategories(response.data.results || response.data);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
       }
     };
 
     fetchCategories();
     
     // Load favorites from localStorage
-  const savedFavorites = localStorage.getItem('favorites');
-  if (savedFavorites) {
-    try {
+    const savedFavorites = localStorage.getItem('favorites');
+    if (savedFavorites) {
       setFavorites(JSON.parse(savedFavorites));
-    } catch (e) {
-      console.error('Error parsing favorites from localStorage:', e);
     }
-  }
-}, []);
+  }, []);
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        
-        // Build query parameters
-        const params = {
-          page,
-          ordering: sortBy === 'price_asc' ? 'price' : sortBy === 'price_desc' ? '-price' : `-${sortBy}`
-        };
-        
-        if (selectedCategory) {
-          params.category = selectedCategory;
-        }
-        
-        if (inStockOnly) {
-          params.is_available = true;
-        }
-        
-        let response;
-        if (searchTerm) {
-          response = await productsAPI.searchProducts(searchTerm);
-        } else {
-          response = await productsAPI.getProducts(params);
-        }
-        
-        setProducts(response.data.results || response.data);
-        setTotalPages(Math.ceil((response.data.count || response.data.length) / 12));
+        const response = await productsAPI.getProducts({
+          search: searchTerm,
+          category: selectedCategory,
+          sort: sortBy,
+          inStock: inStockOnly,
+          price_min: priceRange[0],
+          price_max: priceRange[1],
+          page: page,
+        });
+        setProducts(response.data.results);
+        setTotalPages(response.data.total_pages);
         setLoading(false);
-      } catch (err) {
-        setError('Failed to load products. Please try again later.');
+      } catch (error) {
+        console.error('Error fetching products:', error);
+        setError('Failed to load products. Please try again.');
         setLoading(false);
-        console.error('Error fetching products:', err);
       }
     };
 
@@ -145,12 +89,12 @@ const ShopPage = () => {
     if (searchTerm) params.set('q', searchTerm);
     if (selectedCategory) params.set('category', selectedCategory);
     if (sortBy) params.set('sort', sortBy);
-    if (inStockOnly) params.set('inStock', 'true');
-    if (page > 1) params.set('page', page.toString());
+    if (inStockOnly) params.set('inStock', inStockOnly);
+    if (page > 1) params.set('page', page);
     
     const newUrl = `${location.pathname}?${params.toString()}`;
     navigate(newUrl, { replace: true });
-  }, [searchTerm, selectedCategory, sortBy, inStockOnly, page, location.pathname, navigate]);
+  }, [searchTerm, selectedCategory, sortBy, inStockOnly, priceRange, page, location.pathname, navigate]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -208,32 +152,22 @@ const ShopPage = () => {
 
   const handleAddToCart = async (product) => {
     try {
-      setAddingToCart({ ...addingToCart, [product.id]: true });
-      
-      console.log('Adding product to cart:', product.id);
-      
-      // Check if cart exists
-      if (!cart) {
-        console.log('No cart exists, creating one first');
-      }
-      
-      const result = await addToCart(product.id, 1);
-      console.log('Add to cart result:', result);
-      
-      enqueueSnackbar(`${product.name} added to cart`, { variant: 'success' });
+      setAddingToCart((prev) => ({ ...prev, [product.id]: true }));
+      await addToCart(product.id, 1);
+      enqueueSnackbar('Product added to cart', { variant: 'success' });
+      refreshCart(); // Refresh the cart to update the cart icon count
     } catch (error) {
       console.error('Error adding to cart:', error);
-      console.error('Error details:', error.response?.data || error.message);
-      enqueueSnackbar(`Failed to add to cart: ${error.message}`, { variant: 'error' });
+      enqueueSnackbar('Failed to add product to cart', { variant: 'error' });
     } finally {
-      setAddingToCart({ ...addingToCart, [product.id]: false });
+      setAddingToCart((prev) => ({ ...prev, [product.id]: false }));
     }
   };
 
   const toggleFavorite = (productId) => {
     let newFavorites;
     if (favorites.includes(productId)) {
-      newFavorites = favorites.filter(id => id !== productId);
+      newFavorites = favorites.filter((id) => id !== productId);
     } else {
       newFavorites = [...favorites, productId];
     }
@@ -244,7 +178,6 @@ const ShopPage = () => {
   return (
     <>
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        {/* Breadcrumbs Navigation */}
         <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3 }}>
           <Link component={RouterLink} to="/" color="inherit">
             Home
@@ -252,7 +185,6 @@ const ShopPage = () => {
           <Typography color="text.primary">Shop</Typography>
         </Breadcrumbs>
 
-        {/* Page Title and Filter Button */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 4 }}>
           <Typography variant="h4" component="h1">
             All Products
@@ -266,7 +198,6 @@ const ShopPage = () => {
           </Button>
         </Box>
 
-        {/* Search and Sort Bar */}
         <Paper elevation={1} sx={{ p: 2, mb: 4 }}>
           <Grid container spacing={2} alignItems="center">
             <Grid item xs={12} md={6}>
@@ -312,7 +243,6 @@ const ShopPage = () => {
           </Grid>
         </Paper>
 
-        {/* Active Filters Display */}
         {(selectedCategory || inStockOnly || searchTerm) && (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
             <Typography variant="body2" sx={{ mr: 1 }}>
@@ -353,7 +283,6 @@ const ShopPage = () => {
           </Box>
         )}
 
-        {/* Filter Drawer */}
         <Drawer
           anchor="right"
           open={drawerOpen}
@@ -373,29 +302,29 @@ const ShopPage = () => {
             <Divider />
             
             <List>
-            <ListItem>
-              <Box sx={{ width: '100%' }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Categories
-                </Typography>
-                <FormControl fullWidth size="small">
-                  <InputLabel id="category-label">Select Category</InputLabel>
-                  <Select
-                    labelId="category-label"
-                    value={selectedCategory}
-                    onChange={handleCategoryChange}
-                    label="Select Category"
-                  >
-                    <MenuItem value="">All Categories</MenuItem>
-                    {Array.isArray(categories) && categories.map((category) => (
-                      <MenuItem key={category.id} value={category.id.toString()}>
-                        {category.name} ({category.products_count})
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Box>
-            </ListItem>
+              <ListItem>
+                <Box sx={{ width: '100%' }}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Categories
+                  </Typography>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="category-label">Select Category</InputLabel>
+                    <Select
+                      labelId="category-label"
+                      value={selectedCategory}
+                      onChange={handleCategoryChange}
+                      label="Select Category"
+                    >
+                      <MenuItem value="">All Categories</MenuItem>
+                      {Array.isArray(categories) && categories.map((category) => (
+                        <MenuItem key={category.id} value={category.id.toString()}>
+                          {category.name} ({category.products_count})
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                </Box>
+              </ListItem>
               
               <ListItem>
                 <FormControlLabel
@@ -452,7 +381,6 @@ const ShopPage = () => {
           </Box>
         </Drawer>
 
-        {/* Product Grid */}
         {loading ? (
           <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
             <CircularProgress />
@@ -496,7 +424,6 @@ const ShopPage = () => {
                       }
                     }}
                   >
-                    {/* Discount badge */}
                     {product.discount_price && (
                       <Box
                         sx={{
@@ -517,7 +444,6 @@ const ShopPage = () => {
                       </Box>
                     )}
                     
-                    {/* Favorite button */}
                     <IconButton
                       sx={{
                         position: 'absolute',
@@ -536,7 +462,6 @@ const ShopPage = () => {
                       )}
                     </IconButton>
                     
-                    {/* Product image */}
                     <CardMedia
                       component={RouterLink}
                       to={`/product/${product.slug}`}
@@ -581,24 +506,24 @@ const ShopPage = () => {
                       </Typography>
                       
                       <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                      {product.discount_price ? (
-                        <>
+                        {product.discount_price ? (
+                          <>
+                            <Typography variant="h6" color="primary" fontWeight="bold">
+                              Ksh{typeof product.discount_price === 'number' ? product.discount_price.toFixed(2) : product.discount_price}
+                            </Typography>
+                            <Typography
+                              variant="body2"
+                              color="text.secondary"
+                              sx={{ ml: 1, textDecoration: 'line-through' }}
+                            >
+                              Ksh{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
+                            </Typography>
+                          </>
+                        ) : (
                           <Typography variant="h6" color="primary" fontWeight="bold">
-                            Ksh{typeof product.discount_price === 'number' ? product.discount_price.toFixed(2) : product.discount_price}
-                          </Typography>
-                          <Typography
-                            variant="body2"
-                            color="text.secondary"
-                            sx={{ ml: 1, textDecoration: 'line-through' }}
-                          >
                             Ksh{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
                           </Typography>
-                        </>
-                      ) : (
-                        <Typography variant="h6" color="primary" fontWeight="bold">
-                          Ksh{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
-                        </Typography>
-                      )}
+                        )}
                       </Box>
                     </CardContent>
                     
@@ -618,7 +543,6 @@ const ShopPage = () => {
               ))}
             </Grid>
             
-            {/* Pagination */}
             {totalPages > 1 && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>
                 <Pagination

@@ -35,7 +35,13 @@ const AdminOrders = () => {
     setLoading(true);
     try {
       const response = await adminAPI.getAllOrders();
-      setOrders(response.data);
+      console.log('API response:', response); // Check the full response
+      console.log('Orders data:', response.data); // Check the data structure
+      
+      // Fix for the filter issue - ensure we're setting an array
+      const ordersArray = Array.isArray(response.data) ? response.data : 
+                         (response.data.results ? response.data.results : []);
+      setOrders(ordersArray);
     } catch (error) {
       console.error('Error fetching orders:', error);
       showAlert('Failed to load orders', 'error');

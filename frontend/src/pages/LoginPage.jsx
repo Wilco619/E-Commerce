@@ -15,7 +15,8 @@ import {
   CircularProgress
 } from '@mui/material';
 import { Visibility, VisibilityOff, LockOutlined } from '@mui/icons-material';
-import { authAPI, cartAPI } from '../services/api';
+import { authAPI } from '../services/api';
+import { ACCESS_TOKEN, REFRESH_TOKEN } from '../services/constants';
 import { useAuth } from '../authentication/AuthContext';
 
 const LoginPage = () => {
@@ -41,74 +42,41 @@ const LoginPage = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('=== LOGIN ATTEMPT STARTED ===');
-    console.log('Form data:', formData);
-    
-    if (!formData.email || !formData.password) {
-      const errorMsg = 'Please enter both username and password';
-      console.log('Validation error:', errorMsg);
-      setError(errorMsg);
-      return;
-    }
-    
+    setLoading(true);
+    setError('');
+
     try {
-      setLoading(true);
-      setError('');
-      
-      // Prepare payload and log it
-      const payload = {
+      const response = await authAPI.login({
         username_or_email: formData.email,
-        password: formData.password
-      };
-      console.log('Login payload:', payload);
-      console.log('API endpoint:', `${authAPI.baseURL || ''}/login/`);
-      
-      // Make API call
-      console.log('Sending login request...');
-      const response = await authAPI.login(payload);
-      
-      // Log successful response
-      console.log('Login successful!');
-      console.log('Response:', response.data);
-      
-      // Store user_id in session storage
-      sessionStorage.setItem('user_id', response.data.user_id);
-      
-      // Redirect to OTP verification page
-      console.log('Redirecting to OTP verification');
-      navigate('/verify-otp', { state: { user_id: response.data.user_id } });
-      
-    } catch (err) {
-      setLoading(false);
-      console.error('=== LOGIN ERROR ===');
-      console.error('Error object:', err);
-      
-      if (err.response) {
-        console.error('Status code:', err.response.status);
-        console.error('Response headers:', err.response.headers);
-        console.error('Response data:', err.response.data);
-        
-        if (err.response.status === 401) {
-          setError('Invalid username or password');
-        } else if (err.response.data && err.response.data.detail) {
-          setError(err.response.data.detail);
-        } else if (err.response.data && err.response.data.non_field_errors) {
-          // Handle non-field errors array specifically
-          setError(err.response.data.non_field_errors.join(', '));
-        } else {
-          setError('Login failed. Please try again.');
-        }
-      } else if (err.request) {
-        console.error('No response received:', err.request);
-        setError('No response from server. Please check your connection.');
+        password: formData.password,
+      });
+
+      console.log('Login response:', response);
+
+      // Check if the response indicates OTP generation
+      if (response.data.message === 'OTP generated. Check your email.' && response.data.user_id) {
+        // Store user_id in session storage
+        sessionStorage.setItem('user_id', response.data.user_id);
+
+        // Redirect to OTP verification page
+        navigate('/verify-otp', { state: { user_id: response.data.user_id } });
+      } else if (response.data.access && response.data.refresh && response.data.user_id) {
+        // Store tokens in localStorage
+        localStorage.setItem(ACCESS_TOKEN, response.data.access);
+        localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
+
+        // Store user_id in session storage
+        sessionStorage.setItem('user_id', response.data.user_id);
+
+        // Redirect to home or dashboard
+        navigate(from, { replace: true });
       } else {
-        console.error('Error message:', err.message);
-        setError('Login failed. Please try again.');
+        throw new Error('Invalid response data');
       }
-      console.error('=== END LOGIN ERROR ===');
-    } finally {
-      console.log('Login attempt completed');
+    } catch (err) {
+      console.error('Login error:', err);
       setLoading(false);
+      setError('Login failed. Please try again.');
     }
   };
 

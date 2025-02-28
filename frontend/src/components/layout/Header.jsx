@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, IconButton, Badge,
   Box, Menu, MenuItem, InputBase, Avatar, Drawer, List, ListItem,
@@ -60,39 +60,51 @@ const Header = () => {
   const { user, isAdmin, isAuthenticated, logout } = useAuth();
   const { cartItemsCount } = useCart();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+  const [headerKey, setHeaderKey] = useState(0); // Add a key to force re-render
   
-  const handleSearch = (e) => {
+  // Force a re-render when auth state or location changes
+  useEffect(() => {
+    setHeaderKey(prevKey => prevKey + 1);
+  }, [isAuthenticated, isAdmin, user, location.pathname]);
+  
+  const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/shop?search=${searchQuery}`);
       setSearchQuery('');
     }
-  };
+  }, [navigate, searchQuery]);
   
-  const handleUserMenuOpen = (event) => {
+  const handleUserMenuOpen = useCallback((event) => {
     setUserMenuAnchor(event.currentTarget);
-  };
+  }, []);
   
-  const handleUserMenuClose = () => {
+  const handleUserMenuClose = useCallback(() => {
     setUserMenuAnchor(null);
-  };
+  }, []);
   
-  const handleLogout = () => {
+  const handleLogout = useCallback(() => {
     logout();
     handleUserMenuClose();
     navigate('/');
-  };
+  }, [logout, handleUserMenuClose, navigate]);
   
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
-  };
-  
+  const toggleMobileMenu = useCallback(() => {
+    setMobileMenuOpen(prevState => !prevState);
+  }, []);
+
+  // Use debug logging to see when auth state changes
+  useEffect(() => {
+    console.log('Auth state in Header:', { isAuthenticated, isAdmin, user });
+  }, [isAuthenticated, isAdmin, user]);
+
   return (
-    <>
+    <div key={headerKey}>
       <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
         <Toolbar>
           {isMobile && (
@@ -130,8 +142,8 @@ const Header = () => {
               <Button color="inherit" component={RouterLink} to="/shop" startIcon={<Store />}>
                 Shop
               </Button>
-              {isAdmin() && (
-                <Button color="inherit" component={RouterLink} to="/admin" startIcon={<Dashboard />}>
+              {isAdmin && (
+                <Button color="inherit" component={RouterLink} to="/admin/categories/new" startIcon={<Dashboard />}>
                   Admin
                 </Button>
               )}
@@ -166,7 +178,7 @@ const Header = () => {
               </IconButton>
             </Tooltip>
             
-            {isAuthenticated() ? (
+            {isAuthenticated ? (
               <>
                 <Tooltip title="Account">
                   <IconButton
@@ -217,8 +229,8 @@ const Header = () => {
                     <ListItemText primary="My Orders" />
                   </MenuItem>
                   
-                  {isAdmin() && (
-                    <MenuItem onClick={() => { handleUserMenuClose(); navigate('/admin'); }}>
+                  {isAdmin && (
+                    <MenuItem onClick={() => { handleUserMenuClose(); navigate('/admin/categories/new'); }}>
                       <ListItemIcon>
                         <Dashboard fontSize="small" />
                       </ListItemIcon>
@@ -286,7 +298,7 @@ const Header = () => {
             
             <Divider />
             
-            {isAuthenticated() ? (
+            {isAuthenticated ? (
               <>
                 <ListItem button component={RouterLink} to="/profile">
                   <ListItemIcon><Person /></ListItemIcon>
@@ -298,20 +310,20 @@ const Header = () => {
                   <ListItemText primary="My Orders" />
                 </ListItem>
                 
-                {isAdmin() && (
+                {isAdmin && (
                   <>
                     <Divider />
-                    <ListItem button component={RouterLink} to="/admin">
+                    <ListItem button component={RouterLink} to="/admin/categories/new">
                       <ListItemIcon><Dashboard /></ListItemIcon>
                       <ListItemText primary="Admin Dashboard" />
                     </ListItem>
                     
-                    <ListItem button component={RouterLink} to="/admin/products">
+                    <ListItem button component={RouterLink} to="/admin/products/new">
                       <ListItemIcon><Inventory /></ListItemIcon>
                       <ListItemText primary="Manage Products" />
                     </ListItem>
                     
-                    <ListItem button component={RouterLink} to="/admin/categories">
+                    <ListItem button component={RouterLink} to="/admin/categories/new">
                       <ListItemIcon><Category /></ListItemIcon>
                       <ListItemText primary="Manage Categories" />
                     </ListItem>
@@ -346,7 +358,7 @@ const Header = () => {
           </List>
         </Box>
       </Drawer>
-    </>
+    </div>
   );
 };
 

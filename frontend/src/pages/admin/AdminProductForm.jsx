@@ -55,7 +55,7 @@ const AdminProductForm = () => {
         
         // Fetch categories
         const categoriesResponse = await productsAPI.getCategories();
-        setCategories(categoriesResponse.data);
+        setCategories(categoriesResponse.data.results || categoriesResponse.data); // Handle paginated and non-paginated responses
         
         // If edit mode, fetch product data
         if (isEditMode) {
@@ -183,7 +183,8 @@ const AdminProductForm = () => {
         price: parseFloat(formData.price),
         discount_price: formData.discount_price ? parseFloat(formData.discount_price) : null,
         stock: parseInt(formData.stock),
-        is_available: formData.is_available
+        is_available: formData.is_available,
+        slug: generateSlug(formData.name) // Generate slug from product name
       };
       
       let response;
@@ -214,6 +215,13 @@ const AdminProductForm = () => {
 
   const handleCancel = () => {
     navigate('/admin/products');
+  };
+
+  const generateSlug = (name) => {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)+/g, '');
   };
 
   if (loading && !formData.name) {
@@ -274,7 +282,7 @@ const AdminProductForm = () => {
                     required
                   >
                     <MenuItem value="">Select a category</MenuItem>
-                    {categories.map((category) => (
+                    {Array.isArray(categories) && categories.map((category) => (
                       <MenuItem key={category.id} value={category.id}>
                         {category.name}
                       </MenuItem>
@@ -511,4 +519,3 @@ const AdminProductForm = () => {
 };
 
 export default AdminProductForm;
-// </antArtif
