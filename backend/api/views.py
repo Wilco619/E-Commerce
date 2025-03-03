@@ -390,56 +390,6 @@ class ProductViewSet(viewsets.ModelViewSet):
             return Response(serializer.data)
         return Response([])
 
-class ProductViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAdminOrReadOnly]
-    lookup_field = 'slug'
-    
-    def get_queryset(self):
-        queryset = Product.objects.filter(is_available=True).prefetch_related('images')
-        category_slug = self.request.query_params.get('category')
-        if category_slug:
-            queryset = queryset.filter(category__slug=category_slug)
-        return queryset
-    
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return ProductDetailSerializer
-        return ProductListSerializer
-    
-    @action(detail=False, methods=['get'])
-    def featured(self, request):
-        # Get products that have featured images
-        featured_products = Product.objects.filter(
-            is_available=True, 
-            images__is_feature=True
-        ).distinct()[:8]  # Limit to 8 products
-        
-        serializer = ProductListSerializer(
-            featured_products, 
-            many=True, 
-            context={'request': request}
-        )
-        return Response(serializer.data)
-    
-    @action(detail=False, methods=['get'])
-    def search(self, request):
-        query = request.query_params.get('q', '')
-        if not query:
-            return Response({"error": "Query parameter 'q' is required"}, 
-                            status=status.HTTP_400_BAD_REQUEST)
-        
-        products = Product.objects.filter(
-            is_available=True,
-            name__icontains=query
-        )
-        
-        serializer = ProductListSerializer(
-            products, 
-            many=True, 
-            context={'request': request}
-        )
-        return Response(serializer.data)
-
 class CartViewSet(viewsets.ModelViewSet):
     serializer_class = CartSerializer
     permission_classes = [permissions.IsAuthenticated]
@@ -461,37 +411,38 @@ class CartViewSet(viewsets.ModelViewSet):
         product_id = request.data.get('product_id')
         quantity = request.data.get('quantity', 1)
         
-        if not product_id:
-            return Response({"error": "Product ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
             product = Product.objects.get(id=product_id)
+            if product.stock < quantity:
+                return Response({"error": "Not enough stock available"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Reduce the stock quantity
+            product.stock -= quantity
+            product.save()
+            
+            # Add item to cart
             cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
             if not created:
-                cart_item.quantity += int(quantity)
-            else:
-                cart_item.quantity = int(quantity)
+                cart_item.quantity += quantity
             cart_item.save()
-            serializer = CartSerializer(cart)
-            return Response(serializer.data)
+            
+            return Response({"message": "Item added to cart"}, status=status.HTTP_200_OK)
         except Product.DoesNotExist:
             return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def remove_item(self, request, pk=None):
         cart = self.get_object()
         cart_item_id = request.data.get('cart_item_id')
         
-        if not cart_item_id:
-            return Response({"error": "Cart item ID is required"}, status=status.HTTP_400_BAD_REQUEST)
-        
         try:
             cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
+            # Restore the stock quantity
+            cart_item.product.stock += cart_item.quantity
+            cart_item.product.save()
+            
             cart_item.delete()
-            serializer = CartSerializer(cart)
-            return Response(serializer.data)
+            return Response({"message": "Item removed from cart"}, status=status.HTTP_200_OK)
         except CartItem.DoesNotExist:
             return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
     
@@ -499,55 +450,39 @@ class CartViewSet(viewsets.ModelViewSet):
     def update_item(self, request, pk=None):
         cart = self.get_object()
         cart_item_id = request.data.get('cart_item_id')
-        quantity = request.data.get('quantity')
-        
-        if not cart_item_id or not quantity:
-            return Response({"error": "Cart item ID and quantity are required"}, status=status.HTTP_400_BAD_REQUEST)
+        quantity = request.data.get('quantity', 1)
         
         try:
             cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
-            cart_item.quantity = int(quantity)
+            if cart_item.product.stock + cart_item.quantity < quantity:
+                return Response({"error": "Not enough stock available"}, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Update the stock quantity
+            cart_item.product.stock += cart_item.quantity - quantity
+            cart_item.product.save()
+            
+            cart_item.quantity = quantity
             cart_item.save()
-            serializer = CartSerializer(cart)
-            return Response(serializer.data)
+            return Response({"message": "Cart item updated"}, status=status.HTTP_200_OK)
         except CartItem.DoesNotExist:
             return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
-        except ValueError:
-            return Response({"error": "Invalid quantity"}, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'])
     def clear(self, request, pk=None):
         cart = self.get_object()
-        cart.items.all().delete()
-        serializer = CartSerializer(cart)
-        return Response(serializer.data)
+        for cart_item in cart.items.all():
+            # Restore the stock quantity
+            cart_item.product.stock += cart_item.quantity
+            cart_item.product.save()
+            
+            cart_item.delete()
+        return Response({"message": "Cart cleared"}, status=status.HTTP_200_OK)
 
 class OrderViewSet(viewsets.ModelViewSet):
+    queryset = Order.objects.all()
     serializer_class = OrderSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_staff:
-            return Order.objects.all()
-        return Order.objects.filter(user=user)
-    
-    def get_serializer_class(self):
-        if self.action == 'create' or self.action == 'checkout':
-            return CheckoutSerializer
-        return OrderSerializer
-    
-    @action(detail=False, methods=['post'])
-    def checkout(self, request):
-        serializer = CheckoutSerializer(data=request.data, context={'request': request})
-        if serializer.is_valid():
-            # Ensure the user is assigned to the order
-            order = serializer.save(user=request.user)
-            order_serializer = OrderSerializer(order)
-            return Response(order_serializer.data, status=status.HTTP_201_CREATED)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    @action(detail=True, methods=['patch'])
+
+    @action(detail=True, methods=['put', 'patch'], url_path='update_status')
     def update_status(self, request, pk=None):
         if not request.user.is_staff:
             return Response({"error": "Only admin users can update order status"}, 
@@ -574,6 +509,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         order.save()
         serializer = OrderSerializer(order)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def checkout(self, request):
+        serializer = CheckoutSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            # Ensure the user is assigned to the order
+            order = serializer.save(user=request.user)
+            order_serializer = OrderSerializer(order)
+            return Response(order_serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class ResendOTPView(GenericAPIView):
     permission_classes = (AllowAny,)
@@ -605,3 +550,38 @@ class ResendOTPView(GenericAPIView):
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
+from django.db.models import Sum
+from .models import Order, Product
+from .serializers import OrderSerializer
+
+class AdminDashboardViewSet(viewsets.ViewSet):
+    permission_classes = [IsAdminUser]
+
+    @action(detail=False, methods=['get'], url_path='dashboard')
+    def get_dashboard_data(self, request):
+        total_orders = Order.objects.count()
+        pending_orders = Order.objects.filter(order_status='PENDING').count()
+        total_products = Product.objects.count()
+        low_stock_products = Product.objects.filter(stock__lte=5).count()
+        total_revenue = Order.objects.filter(order_status='COMPLETED').aggregate(total_revenue=Sum('order_total'))['total_revenue'] or 0
+
+        recent_orders = Order.objects.order_by('-created_at')[:5]
+        recent_orders_data = OrderSerializer(recent_orders, many=True).data
+
+        data = {
+            'stats': {
+                'totalOrders': total_orders,
+                'pendingOrders': pending_orders,
+                'totalProducts': total_products,
+                'lowStockProducts': low_stock_products,
+                'totalRevenue': total_revenue,
+            },
+            'recentOrders': recent_orders_data,
+        }
+        return Response(data)

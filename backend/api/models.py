@@ -179,6 +179,7 @@ class Order(models.Model):
         ('CREDIT_CARD', 'Credit Card'),
         ('PAYPAL', 'PayPal'),
         ('BANK_TRANSFER', 'Bank Transfer'),
+        ('Mpesa', 'Mpesa'),
     )
     
     user = models.ForeignKey(CustomUser, on_delete=models.SET_NULL, null=True, blank=True)
@@ -195,6 +196,8 @@ class Order(models.Model):
     payment_status = models.CharField(max_length=20, choices=PAYMENT_STATUS_CHOICES, default='PENDING')
     payment_method = models.CharField(max_length=20, choices=PAYMENT_METHOD_CHOICES)
     tracking_number = models.CharField(max_length=100, blank=True, null=True)
+    delivery_location = models.CharField(max_length=255, blank=True, null=True)  # New field for delivery location
+    is_pickup = models.BooleanField(default=False)  # New field for pickup option
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

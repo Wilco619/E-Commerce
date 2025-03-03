@@ -21,6 +21,8 @@ import { Link as RouterLink } from 'react-router-dom';
 import { productsAPI, cartAPI } from '../services/api';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import { useSnackbar } from 'notistack';
+import { useCart } from '../authentication/CartContext';
 
 const ProductDetailPage = () => {
   const { slug } = useParams();
@@ -31,12 +33,9 @@ const ProductDetailPage = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState(0);
   const [selectedImage, setSelectedImage] = useState(null);
-  const [cart, setCart] = useState(null);
-  const [snackbar, setSnackbar] = useState({
-    open: false,
-    message: '',
-    severity: 'success'
-  });
+  const [addingToCart, setAddingToCart] = useState(false);
+  const { enqueueSnackbar } = useSnackbar();
+  const { cart, addToCart, refreshCart } = useCart();
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -56,22 +55,7 @@ const ProductDetailPage = () => {
       }
     };
 
-    const fetchCart = async () => {
-      try {
-        const response = await cartAPI.getCart();
-        if (response.data && response.data.length > 0) {
-          setCart(response.data[0]);
-        } else {
-          const newCartResponse = await cartAPI.createCart();
-          setCart(newCartResponse.data);
-        }
-      } catch (err) {
-        console.error('Error fetching cart:', err);
-      }
-    };
-
     fetchProduct();
-    fetchCart();
   }, [slug]);
 
   const handleQuantityChange = (event) => {
@@ -82,55 +66,54 @@ const ProductDetailPage = () => {
   };
 
   const handleAddToCart = async () => {
-    if (!cart) return;
-    
+    if (!cart) {
+      enqueueSnackbar('Cart not found. Please try again.', { variant: 'error' });
+      return;
+    }
+
     try {
-      await cartAPI.addToCart(cart.id, {
-        product_id: product.id,
-        quantity: quantity
-      });
-      
-      setSnackbar({
-        open: true,
-        message: 'Product added to cart!',
-        severity: 'success'
-      });
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to add product to cart. Please try again.',
-        severity: 'error'
-      });
-      console.error('Error adding to cart:', err);
+      setAddingToCart(true);
+      await addToCart(product.id, quantity);
+      enqueueSnackbar('Product added to cart', { variant: 'success' });
+      refreshCart(); // Refresh the cart to update the cart icon count
+      setProduct((prevProduct) => ({
+        ...prevProduct,
+        stock: prevProduct.stock - quantity
+      }));
+    } catch (error) {
+      console.error('Error adding to cart:', error);
+      enqueueSnackbar('Failed to add product to cart', { variant: 'error' });
+    } finally {
+      setAddingToCart(false);
     }
   };
 
   const handleBuyNow = async () => {
+    if (!cart) {
+      enqueueSnackbar('Cart not found. Please try again.', { variant: 'error' });
+      return;
+    }
+
     try {
-      if (!cart) return;
-      
-      await cartAPI.addToCart(cart.id, {
-        product_id: product.id,
-        quantity: quantity
-      });
-      
+      setAddingToCart(true);
+      await addToCart(product.id, quantity);
+      enqueueSnackbar('Product added to cart', { variant: 'success' });
+      refreshCart(); // Refresh the cart to update the cart icon count
+      setProduct((prevProduct) => ({
+        ...prevProduct,
+        stock: prevProduct.stock - quantity
+      }));
       navigate('/cart');
-    } catch (err) {
-      setSnackbar({
-        open: true,
-        message: 'Failed to process buy now. Please try again.',
-        severity: 'error'
-      });
-      console.error('Error with buy now:', err);
+    } catch (error) {
+      console.error('Error with buy now:', error);
+      enqueueSnackbar('Failed to process buy now. Please try again.', { variant: 'error' });
+    } finally {
+      setAddingToCart(false);
     }
   };
 
   const handleTabChange = (event, newValue) => {
     setActiveTab(newValue);
-  };
-
-  const handleCloseSnackbar = () => {
-    setSnackbar({ ...snackbar, open: false });
   };
 
   if (loading) {
@@ -286,16 +269,18 @@ const ProductDetailPage = () => {
                   onClick={handleAddToCart}
                   size="large"
                   fullWidth
+                  disabled={addingToCart}
                 >
-                  Add to Cart
+                  {addingToCart ? 'Adding...' : 'Add to Cart'}
                 </Button>
                 <Button
                   variant="outlined"
                   onClick={handleBuyNow}
                   size="large"
                   fullWidth
+                  disabled={addingToCart}
                 >
-                  Buy Now
+                  {addingToCart ? 'Processing...' : 'Buy Now'}
                 </Button>
               </Box>
             </>
@@ -336,16 +321,6 @@ const ProductDetailPage = () => {
           )}
         </Paper>
       </Box>
-
-      <Snackbar
-        open={snackbar.open}
-        autoHideDuration={5000}
-        onClose={handleCloseSnackbar}
-      >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
-          {snackbar.message}
-        </Alert>
-      </Snackbar>
     </Container>
   );
 };

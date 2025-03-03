@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, IconButton, Badge,
@@ -15,6 +15,7 @@ import { styled, alpha } from '@mui/material/styles';
 import { useAuth } from '../../authentication/AuthContext';
 import { useCart } from '../../authentication/CartContext';
 
+// Styled components
 const SearchBox = styled('div')(({ theme }) => ({
   position: 'relative',
   borderRadius: theme.shape.borderRadius,
@@ -54,24 +55,33 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
+const LogoText = styled(Typography)(({ theme }) => ({
+  textDecoration: 'none',
+  color: 'inherit',
+  display: 'flex',
+  alignItems: 'center',
+  fontWeight: 700,
+  marginRight: theme.spacing(2)
+}));
+
 const Header = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const { user, isAdmin, isAuthenticated, logout } = useAuth();
   const { cartItemsCount } = useCart();
   const navigate = useNavigate();
-  const location = useLocation();
   
+  // State
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuAnchor, setUserMenuAnchor] = useState(null);
-  const [headerKey, setHeaderKey] = useState(0); // Add a key to force re-render
   
-  // Force a re-render when auth state or location changes
-  useEffect(() => {
-    setHeaderKey(prevKey => prevKey + 1);
-  }, [isAuthenticated, isAdmin, user, location.pathname]);
-  
+  // Memoized user initial
+  const userInitial = useMemo(() => {
+    return user?.username?.charAt(0)?.toUpperCase() || 'U';
+  }, [user?.username]);
+
+  // Handlers
   const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
@@ -90,179 +100,218 @@ const Header = () => {
   
   const handleLogout = useCallback(() => {
     logout();
-    handleUserMenuClose();
+    setUserMenuAnchor(null);
     navigate('/');
-  }, [logout, handleUserMenuClose, navigate]);
+  }, [logout, navigate]);
   
   const toggleMobileMenu = useCallback(() => {
     setMobileMenuOpen(prevState => !prevState);
   }, []);
+  
+  const navigateAndCloseMenus = useCallback((path) => {
+    setUserMenuAnchor(null);
+    setMobileMenuOpen(false);
+    navigate(path);
+  }, [navigate]);
 
-  // Use debug logging to see when auth state changes
-  useEffect(() => {
-    console.log('Auth state in Header:', { isAuthenticated, isAdmin, user });
-  }, [isAuthenticated, isAdmin, user]);
+  // Admin menu items memoized
+  const adminMenuItems = useMemo(() => (
+    <>
+      <MenuItem onClick={() => navigateAndCloseMenus('/admin')}>
+        <ListItemIcon>
+          <Dashboard fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Admin Dashboard" />
+      </MenuItem>
+      <Divider />
+      <MenuItem onClick={() => navigateAndCloseMenus('/admin/products/new')}>
+        <ListItemIcon>
+          <Inventory fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Manage Products" />
+      </MenuItem>
+      <MenuItem onClick={() => navigateAndCloseMenus('/admin/categories/new')}>
+        <ListItemIcon>
+          <Category fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Manage Categories" />
+      </MenuItem>
+      <MenuItem onClick={() => navigateAndCloseMenus('/admin/orders')}>
+        <ListItemIcon>
+          <Receipt fontSize="small" />
+        </ListItemIcon>
+        <ListItemText primary="Manage Orders" />
+      </MenuItem>
+    </>
+  ), [navigateAndCloseMenus]);
+
+  // Admin mobile menu items memoized
+  const adminMobileItems = useMemo(() => (
+    <>
+      <Divider />
+      <ListItem button onClick={() => navigateAndCloseMenus('/admin')}>
+        <ListItemIcon><Dashboard /></ListItemIcon>
+        <ListItemText primary="Admin Dashboard" />
+      </ListItem>
+      <ListItem button onClick={() => navigateAndCloseMenus('/admin/products/new')}>
+        <ListItemIcon><Inventory /></ListItemIcon>
+        <ListItemText primary="Manage Products" />
+      </ListItem>
+      <ListItem button onClick={() => navigateAndCloseMenus('/admin/categories/new')}>
+        <ListItemIcon><Category /></ListItemIcon>
+        <ListItemText primary="Manage Categories" />
+      </ListItem>
+      <ListItem button onClick={() => navigateAndCloseMenus('/admin/orders')}>
+        <ListItemIcon><Receipt /></ListItemIcon>
+        <ListItemText primary="Manage Orders" />
+      </ListItem>
+    </>
+  ), [navigateAndCloseMenus]);
 
   return (
-    <div key={headerKey}>
-      <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar>
-          {isMobile && (
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={toggleMobileMenu}
-              sx={{ mr: 2 }}
-            >
-              <MenuIcon />
-            </IconButton>
-          )}
-          
-          <Typography
-            variant="h6"
-            component={RouterLink}
-            to="/"
-            sx={{
-              textDecoration: 'none',
-              color: 'inherit',
-              display: 'flex',
-              alignItems: 'center',
-              fontWeight: 700
-            }}
+    <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+      <Toolbar>
+        {isMobile && (
+          <IconButton
+            color="inherit"
+            aria-label="open drawer"
+            edge="start"
+            onClick={toggleMobileMenu}
+            sx={{ mr: 2 }}
           >
-            SHOP<Box component="span" sx={{ color: 'primary.light' }}>HUB</Box>
-          </Typography>
-          
-          {!isMobile && (
-            <>
-              <Button color="inherit" component={RouterLink} to="/" startIcon={<Home />}>
-                Home
+            <MenuIcon />
+          </IconButton>
+        )}
+        
+        <LogoText
+          variant="h6"
+          component={RouterLink}
+          to="/"
+        >
+          SHOP<Box component="span" sx={{ color: 'primary.light' }}>HUB</Box>
+        </LogoText>
+        
+        {!isMobile && (
+          <Box sx={{ flexGrow: 0 }}>
+            <Button color="inherit" component={RouterLink} to="/" startIcon={<Home />}>
+              Home
+            </Button>
+            <Button color="inherit" component={RouterLink} to="/shop" startIcon={<Store />}>
+              Shop
+            </Button>
+            {isAdmin && (
+              <Button color="inherit" component={RouterLink} to="/admin" startIcon={<Dashboard />}>
+                Admin
               </Button>
-              <Button color="inherit" component={RouterLink} to="/shop" startIcon={<Store />}>
-                Shop
-              </Button>
-              {isAdmin && (
-                <Button color="inherit" component={RouterLink} to="/admin/categories/new" startIcon={<Dashboard />}>
-                  Admin
-                </Button>
-              )}
-            </>
-          )}
-          
-          <Box component="form" onSubmit={handleSearch} sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
-            <SearchBox>
-              <SearchIconWrapper>
-                <Search />
-              </SearchIconWrapper>
-              <StyledInputBase
-                placeholder="Search products…"
-                inputProps={{ 'aria-label': 'search' }}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-            </SearchBox>
-          </Box>
-          
-          <Box sx={{ display: 'flex' }}>
-            <Tooltip title="Cart">
-              <IconButton 
-                color="inherit" 
-                component={RouterLink} 
-                to="/cart"
-                aria-label={`${cartItemsCount} items in cart`}
-              >
-                <Badge badgeContent={cartItemsCount} color="error">
-                  <ShoppingCart />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-            
-            {isAuthenticated ? (
-              <>
-                <Tooltip title="Account">
-                  <IconButton
-                    onClick={handleUserMenuOpen}
-                    color="inherit"
-                    aria-controls="user-menu"
-                    aria-haspopup="true"
-                  >
-                    <Avatar 
-                      sx={{ 
-                        width: 32, 
-                        height: 32, 
-                        bgcolor: 'primary.main',
-                        fontSize: '0.875rem'
-                      }}
-                    >
-                      {user?.username?.charAt(0)?.toUpperCase() || 'U'}
-                    </Avatar>
-                  </IconButton>
-                </Tooltip>
-                
-                <Menu
-                  id="user-menu"
-                  anchorEl={userMenuAnchor}
-                  anchorOrigin={{
-                    vertical: 'bottom',
-                    horizontal: 'right',
-                  }}
-                  keepMounted
-                  transformOrigin={{
-                    vertical: 'top',
-                    horizontal: 'right',
-                  }}
-                  open={Boolean(userMenuAnchor)}
-                  onClose={handleUserMenuClose}
-                >
-                  <MenuItem onClick={() => { handleUserMenuClose(); navigate('/profile'); }}>
-                    <ListItemIcon>
-                      <Person fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="Profile" />
-                  </MenuItem>
-                  
-                  <MenuItem onClick={() => { handleUserMenuClose(); navigate('/orders'); }}>
-                    <ListItemIcon>
-                      <Receipt fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="My Orders" />
-                  </MenuItem>
-                  
-                  {isAdmin && (
-                    <MenuItem onClick={() => { handleUserMenuClose(); navigate('/admin/categories/new'); }}>
-                      <ListItemIcon>
-                        <Dashboard fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText primary="Admin Dashboard" />
-                    </MenuItem>
-                  )}
-                  
-                  <Divider />
-                  
-                  <MenuItem onClick={handleLogout}>
-                    <ListItemIcon>
-                      <Logout fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText primary="Logout" />
-                  </MenuItem>
-                </Menu>
-              </>
-            ) : (
-              !isMobile && (
-                <>
-                  <Button color="inherit" component={RouterLink} to="/login">
-                    Login
-                  </Button>
-                  <Button color="inherit" component={RouterLink} to="/register" variant="outlined" sx={{ ml: 1 }}>
-                    Register
-                  </Button>
-                </>
-              )
             )}
           </Box>
-        </Toolbar>
-      </AppBar>
+        )}
+        
+        <Box component="form" onSubmit={handleSearch} sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
+          <SearchBox>
+            <SearchIconWrapper>
+              <Search />
+            </SearchIconWrapper>
+            <StyledInputBase
+              placeholder="Search products…"
+              inputProps={{ 'aria-label': 'search' }}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </SearchBox>
+        </Box>
+        
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Tooltip title="Cart">
+            <IconButton 
+              color="inherit" 
+              component={RouterLink} 
+              to="/cart"
+              aria-label={`${cartItemsCount} items in cart`}
+            >
+              <Badge badgeContent={cartItemsCount} color="error">
+                <ShoppingCart />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+          
+          {isAuthenticated ? (
+            <>
+              <Tooltip title="Account">
+                <IconButton
+                  onClick={handleUserMenuOpen}
+                  color="inherit"
+                  aria-controls="user-menu"
+                  aria-haspopup="true"
+                >
+                  <Avatar 
+                    sx={{ 
+                      width: 32, 
+                      height: 32, 
+                      bgcolor: 'primary.main',
+                      fontSize: '0.875rem'
+                    }}
+                  >
+                    {userInitial}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
+              
+              <Menu
+                id="user-menu"
+                anchorEl={userMenuAnchor}
+                anchorOrigin={{
+                  vertical: 'bottom',
+                  horizontal: 'right',
+                }}
+                keepMounted
+                transformOrigin={{
+                  vertical: 'top',
+                  horizontal: 'right',
+                }}
+                open={Boolean(userMenuAnchor)}
+                onClose={handleUserMenuClose}
+              >
+                <MenuItem onClick={() => navigateAndCloseMenus('/profile')}>
+                  <ListItemIcon>
+                    <Person fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Profile" />
+                </MenuItem>
+                
+                <MenuItem onClick={() => navigateAndCloseMenus('/orders')}>
+                  <ListItemIcon>
+                    <Receipt fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="My Orders" />
+                </MenuItem>
+                
+                {isAdmin && adminMenuItems}
+                
+                <Divider />
+                
+                <MenuItem onClick={handleLogout}>
+                  <ListItemIcon>
+                    <Logout fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary="Logout" />
+                </MenuItem>
+              </Menu>
+            </>
+          ) : (
+            !isMobile && (
+              <Box sx={{ display: 'flex' }}>
+                <Button color="inherit" component={RouterLink} to="/login">
+                  Login
+                </Button>
+                <Button color="inherit" component={RouterLink} to="/register" variant="outlined" sx={{ ml: 1 }}>
+                  Register
+                </Button>
+              </Box>
+            )
+          )}
+        </Box>
+      </Toolbar>
       
       {/* Mobile drawer menu */}
       <Drawer
@@ -273,21 +322,19 @@ const Header = () => {
         <Box
           sx={{ width: 250 }}
           role="presentation"
-          onClick={toggleMobileMenu}
-          onKeyDown={toggleMobileMenu}
         >
           <List>
-            <ListItem button component={RouterLink} to="/">
+            <ListItem button onClick={() => navigateAndCloseMenus('/')}>
               <ListItemIcon><Home /></ListItemIcon>
               <ListItemText primary="Home" />
             </ListItem>
             
-            <ListItem button component={RouterLink} to="/shop">
+            <ListItem button onClick={() => navigateAndCloseMenus('/shop')}>
               <ListItemIcon><Store /></ListItemIcon>
               <ListItemText primary="Shop" />
             </ListItem>
             
-            <ListItem button component={RouterLink} to="/cart">
+            <ListItem button onClick={() => navigateAndCloseMenus('/cart')}>
               <ListItemIcon>
                 <Badge badgeContent={cartItemsCount} color="error">
                   <ShoppingCart />
@@ -300,40 +347,17 @@ const Header = () => {
             
             {isAuthenticated ? (
               <>
-                <ListItem button component={RouterLink} to="/profile">
+                <ListItem button onClick={() => navigateAndCloseMenus('/profile')}>
                   <ListItemIcon><Person /></ListItemIcon>
                   <ListItemText primary="Profile" />
                 </ListItem>
                 
-                <ListItem button component={RouterLink} to="/orders">
+                <ListItem button onClick={() => navigateAndCloseMenus('/orders')}>
                   <ListItemIcon><Receipt /></ListItemIcon>
                   <ListItemText primary="My Orders" />
                 </ListItem>
                 
-                {isAdmin && (
-                  <>
-                    <Divider />
-                    <ListItem button component={RouterLink} to="/admin/categories/new">
-                      <ListItemIcon><Dashboard /></ListItemIcon>
-                      <ListItemText primary="Admin Dashboard" />
-                    </ListItem>
-                    
-                    <ListItem button component={RouterLink} to="/admin/products/new">
-                      <ListItemIcon><Inventory /></ListItemIcon>
-                      <ListItemText primary="Manage Products" />
-                    </ListItem>
-                    
-                    <ListItem button component={RouterLink} to="/admin/categories/new">
-                      <ListItemIcon><Category /></ListItemIcon>
-                      <ListItemText primary="Manage Categories" />
-                    </ListItem>
-                    
-                    <ListItem button component={RouterLink} to="/admin/orders">
-                      <ListItemIcon><Receipt /></ListItemIcon>
-                      <ListItemText primary="Manage Orders" />
-                    </ListItem>
-                  </>
-                )}
+                {isAdmin && adminMobileItems}
                 
                 <Divider />
                 
@@ -344,12 +368,12 @@ const Header = () => {
               </>
             ) : (
               <>
-                <ListItem button component={RouterLink} to="/login">
+                <ListItem button onClick={() => navigateAndCloseMenus('/login')}>
                   <ListItemIcon><AccountCircle /></ListItemIcon>
                   <ListItemText primary="Login" />
                 </ListItem>
                 
-                <ListItem button component={RouterLink} to="/register">
+                <ListItem button onClick={() => navigateAndCloseMenus('/register')}>
                   <ListItemIcon><Person /></ListItemIcon>
                   <ListItemText primary="Register" />
                 </ListItem>
@@ -358,7 +382,7 @@ const Header = () => {
           </List>
         </Box>
       </Drawer>
-    </div>
+    </AppBar>
   );
 };
 

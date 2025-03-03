@@ -14,6 +14,11 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -45,6 +50,8 @@ INSTALLED_APPS = [
     'django_filters',
     'corsheaders',
     'api',
+    'mpesaconfig',
+    'django_daraja',
 ]
 
 MIDDLEWARE = [
@@ -190,3 +197,23 @@ AUTH_USER_MODEL = 'api.CustomUser'
 
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_SAVE_EVERY_REQUEST = True
+
+# M-Pesa API Configurations
+# For security reasons, it's best to use environment variables
+# You can use python-decouple or django-environ to manage these
+# M-Pesa API configurations using environment variables
+MPESA_CONFIG = {
+    'MPESA_ENVIRONMENT': os.getenv('MPESA_ENVIRONMENT', 'sandbox'),
+    'MPESA_CONSUMER_KEY': os.getenv('MPESA_CONSUMER_KEY'),
+    'MPESA_CONSUMER_SECRET': os.getenv('MPESA_CONSUMER_SECRET'),
+    'MPESA_SHORTCODE': os.getenv('MPESA_SHORTCODE'),
+    'MPESA_EXPRESS_SHORTCODE': os.getenv('MPESA_EXPRESS_SHORTCODE'),
+    'MPESA_PASSKEY': os.getenv('MPESA_PASSKEY'),
+    'MPESA_SHORTCODE_TYPE': os.getenv('MPESA_SHORTCODE_TYPE', 'paybill'),
+
+    # Callback URLs
+    'MPESA_CALLBACK_BASE_URL': os.getenv('MPESA_CALLBACK_BASE_URL'),
+    'MPESA_C2B_CONFIRMATION_URL': f"{os.getenv('MPESA_CALLBACK_BASE_URL')}/api/mpesa/c2b-confirmation/",
+    'MPESA_C2B_VALIDATION_URL': f"{os.getenv('MPESA_CALLBACK_BASE_URL')}/api/mpesa/c2b-validation/",
+    'MPESA_STK_PUSH_CALLBACK_URL': f"{os.getenv('MPESA_CALLBACK_BASE_URL')}/api/mpesa/stk-push-callback/",
+}

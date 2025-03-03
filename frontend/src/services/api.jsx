@@ -148,7 +148,19 @@ const cartAPI = {
 const orderAPI = {
   getOrders: () => API.get('/orders/'),
   getOrder: (id) => API.get(`/orders/${id}/`),
-  checkout: (checkoutData) => API.post('/orders/checkout/', checkoutData),
+  checkout: async (checkoutData) => {
+    console.log('Checkout request data:', checkoutData);
+    try {
+      const response = await API.post('/orders/checkout/', checkoutData);
+      console.log('Checkout response data:', response.data);
+      return response;
+    } catch (error) {
+      console.error('Checkout error:', error.response?.data || error.message);
+      throw error;
+    }
+  },
+  initiateMpesaPayment: (paymentData) => API.post('/mpesa/initiate_payment/', paymentData),
+  queryMpesaStatus: (queryData) => API.post('/mpesa/query_status/', queryData),
 };
 
 // Admin API Services
@@ -173,7 +185,9 @@ const adminAPI = {
   // Order management - Using the existing orders endpoints
   getAllOrders: () => API.get('/orders/'),
   getOrder: (id) => API.get(`/orders/${id}/`),
-  updateOrderStatus: (orderId, statusData) => API.post(`/orders/${orderId}/update_status/`, statusData),
+  updateOrderStatus: (orderId, statusData) => API.patch(`/orders/${orderId}/update_status/`, statusData),
+
+  getDashboardData: () => API.get('/admin/dashboard/'),
 };
 
 export { API, authAPI, productsAPI, cartAPI, orderAPI, adminAPI };

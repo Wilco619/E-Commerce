@@ -156,6 +156,11 @@ const ShopPage = () => {
       await addToCart(product.id, 1);
       enqueueSnackbar('Product added to cart', { variant: 'success' });
       refreshCart(); // Refresh the cart to update the cart icon count
+      setProducts((prevProducts) =>
+        prevProducts.map((p) =>
+          p.id === product.id ? { ...p, stock: p.stock - 1 } : p
+        )
+      );
     } catch (error) {
       console.error('Error adding to cart:', error);
       enqueueSnackbar('Failed to add product to cart', { variant: 'error' });
@@ -408,140 +413,146 @@ const ShopPage = () => {
           </Box>
         ) : (
           <>
-            <Grid container spacing={3}>
-              {products.map((product) => (
-                <Grid item key={product.id} xs={12} sm={6} md={4} lg={3}>
-                  <Card
-                    sx={{
-                      height: '100%',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      position: 'relative',
-                      transition: 'transform 0.2s',
-                      '&:hover': {
-                        transform: 'translateY(-5px)',
-                        boxShadow: '0 8px 16px rgba(0,0,0,0.1)'
-                      }
-                    }}
-                  >
-                    {product.discount_price && (
-                      <Box
-                        sx={{
-                          position: 'absolute',
-                          top: 10,
-                          left: 10,
-                          bgcolor: 'error.main',
-                          color: 'white',
-                          px: 1,
-                          py: 0.5,
-                          borderRadius: 1,
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          zIndex: 1
-                        }}
-                      >
-                        {Math.round(((product.price - product.discount_price) / product.price) * 100)}% OFF
-                      </Box>
-                    )}
-                    
-                    <IconButton
+            <Grid container spacing={2}>
+            {products.map((product) => (
+              <Grid item key={product.id} xs={6} sm={4} md={3} lg={2}>
+                <Card
+                  sx={{
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    position: 'relative',
+                    transition: 'transform 0.2s',
+                    maxWidth: '100%',
+                    '&:hover': {
+                      transform: 'translateY(-3px)',
+                      boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                    }
+                  }}
+                >
+                  {product.discount_price && (
+                    <Box
                       sx={{
                         position: 'absolute',
-                        top: 10,
-                        right: 10,
-                        bgcolor: 'background.paper',
-                        '&:hover': { bgcolor: 'background.paper' },
+                        top: 5,
+                        left: 5,
+                        bgcolor: 'error.main',
+                        color: 'white',
+                        px: 0.5,
+                        py: 0.2,
+                        borderRadius: 0.5,
+                        fontSize: '0.65rem',
+                        fontWeight: 'bold',
                         zIndex: 1
                       }}
-                      onClick={() => toggleFavorite(product.id)}
                     >
-                      {favorites.includes(product.id) ? (
-                        <FavoriteIcon color="error" />
-                      ) : (
-                        <FavoriteBorderIcon />
-                      )}
-                    </IconButton>
-                    
-                    <CardMedia
+                      {Math.round(((product.price - product.discount_price) / product.price) * 100)}% OFF
+                    </Box>
+                  )}
+                  
+                  <IconButton
+                    size="small"
+                    sx={{
+                      position: 'absolute',
+                      top: 5,
+                      right: 5,
+                      bgcolor: 'background.paper',
+                      '&:hover': { bgcolor: 'background.paper' },
+                      zIndex: 1,
+                      padding: 0.5
+                    }}
+                    onClick={() => toggleFavorite(product.id)}
+                  >
+                    {favorites.includes(product.id) ? (
+                      <FavoriteIcon color="error" fontSize="small" />
+                    ) : (
+                      <FavoriteBorderIcon fontSize="small" />
+                    )}
+                  </IconButton>
+                  
+                  <CardMedia
+                    component={RouterLink}
+                    to={`/product/${product.slug}`}
+                    sx={{
+                      pt: '70%',
+                      position: 'relative',
+                      backgroundSize: 'contain',
+                      backgroundPosition: 'center',
+                      cursor: 'pointer'
+                    }}
+                    image={product.feature_image || '/placeholder-product.png'}
+                    title={product.name}
+                  />
+                  
+                  <CardContent sx={{ flexGrow: 1, py: 1, px: 1.5 }}>
+                    <Typography
+                      variant="body2"
                       component={RouterLink}
                       to={`/product/${product.slug}`}
                       sx={{
-                        pt: '80%',
-                        position: 'relative',
-                        backgroundSize: 'contain',
-                        backgroundPosition: 'center',
-                        cursor: 'pointer'
+                        textDecoration: 'none',
+                        color: 'text.primary',
+                        fontWeight: 'medium',
+                        '&:hover': { color: 'primary.main' },
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                        overflow: 'hidden',
+                        lineHeight: 1.2,
+                        height: '2.4em',
+                        fontSize: '0.85rem'
                       }}
-                      image={product.feature_image || '/placeholder-product.png'}
-                      title={product.name}
-                    />
+                    >
+                      {product.name}
+                    </Typography>
                     
-                    <CardContent sx={{ flexGrow: 1 }}>
-                      <Typography
-                        variant="subtitle1"
-                        component={RouterLink}
-                        to={`/product/${product.slug}`}
-                        sx={{
-                          textDecoration: 'none',
-                          color: 'text.primary',
-                          fontWeight: 'bold',
-                          '&:hover': { color: 'primary.main' },
-                          display: '-webkit-box',
-                          WebkitLineClamp: 2,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                          lineHeight: 1.2,
-                          height: '2.4em'
-                        }}
-                      >
-                        {product.name}
-                      </Typography>
-                      
-                      <Typography
-                        variant="body2"
-                        color="text.secondary"
-                        sx={{ mt: 1, mb: 0.5 }}
-                      >
-                        {product.category_name}
-                      </Typography>
-                      
-                      <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-                        {product.discount_price ? (
-                          <>
-                            <Typography variant="h6" color="primary" fontWeight="bold">
-                              Ksh{typeof product.discount_price === 'number' ? product.discount_price.toFixed(2) : product.discount_price}
-                            </Typography>
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              sx={{ ml: 1, textDecoration: 'line-through' }}
-                            >
-                              Ksh{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
-                            </Typography>
-                          </>
-                        ) : (
-                          <Typography variant="h6" color="primary" fontWeight="bold">
-                            Ksh{typeof product.price === 'number' ? product.price.toFixed(2) : product.price}
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ display: 'block', mt: 0.5 }}
+                    >
+                      {product.category_name}
+                    </Typography>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                      {product.discount_price ? (
+                        <>
+                          <Typography variant="subtitle2" color="primary">
+                            Ksh{typeof product.discount_price === 'number' ? product.discount_price.toFixed(0) : product.discount_price}
                           </Typography>
-                        )}
-                      </Box>
-                    </CardContent>
-                    
-                    <CardActions>
-                      <Button
-                        fullWidth
-                        variant="contained"
-                        startIcon={<AddShoppingCartIcon />}
-                        disabled={!product.is_available || addingToCart[product.id]}
-                        onClick={() => handleAddToCart(product)}
-                      >
-                        {addingToCart[product.id] ? 'Adding...' : product.is_available ? 'Add to Cart' : 'Out of Stock'}
-                      </Button>
-                    </CardActions>
-                  </Card>
-                </Grid>
-              ))}
-            </Grid>
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            sx={{ ml: 0.5, textDecoration: 'line-through' }}
+                          >
+                            Ksh{typeof product.price === 'number' ? product.price.toFixed(0) : product.price}
+                          </Typography>
+                        </>
+                      ) : (
+                        <Typography variant="subtitle2" color="primary" fontWeight="medium">
+                          Ksh{typeof product.price === 'number' ? product.price.toFixed(0) : product.price}
+                        </Typography>
+                      )}
+                    </Box>
+                  </CardContent>
+                  
+                  <CardActions sx={{ p: 1 }}>
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      size="small"
+                      startIcon={<AddShoppingCartIcon fontSize="small" />}
+                      disabled={!product.is_available || addingToCart[product.id]}
+                      onClick={() => handleAddToCart(product)}
+                      sx={{ fontSize: '0.7rem', py: 0.5 }}
+                    >
+                      {addingToCart[product.id] ? 'Adding...' : product.is_available ? 'Add to Cart' : 'Out of Stock'}
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
             
             {totalPages > 1 && (
               <Box sx={{ display: 'flex', justifyContent: 'center', mt: 5 }}>

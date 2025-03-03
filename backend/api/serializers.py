@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate
 from django.core.exceptions import ValidationError
 from datetime import timedelta
 from django.utils import timezone
+from django.conf import settings
 
 import logging
 
@@ -12,6 +13,7 @@ from .models import (
     CustomUser, Category, Product, ProductImage, 
     Cart, CartItem, Order, OrderItem
 )
+
 
 logger = logging.getLogger(__name__)
 
@@ -220,11 +222,11 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CategorySerializer(serializers.ModelSerializer):
+    products_count = serializers.IntegerField(source='products.count', read_only=True)
+    
     class Meta:
         model = Category
         fields = '__all__'
-
-
 
 class CategoryDetailSerializer(serializers.ModelSerializer):
     products = ProductListSerializer(many=True, read_only=True)
@@ -307,6 +309,10 @@ class CheckoutSerializer(serializers.ModelSerializer):
                 price=cart_item.product.discount_price or cart_item.product.price,
                 total=cart_item.total_price
             )
+            
+            # Reduce the stock quantity
+            cart_item.product.stock -= cart_item.quantity
+            cart_item.product.save()
         
         # Clear the cart
         cart.items.all().delete()

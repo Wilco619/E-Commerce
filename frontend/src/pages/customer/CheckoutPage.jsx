@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   Box,
   Container,
@@ -24,9 +25,15 @@ import {
   TableCell,
   TableContainer,
   TableHead,
-  TableRow
+  TableRow,
+  Checkbox,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
-import { cartAPI, orderAPI } from '../../services/api';
+import { cartAPI, orderAPI, authAPI } from '../../services/api';
 
 const steps = ['Shipping Information', 'Payment Method', 'Review Order'];
 
@@ -39,6 +46,13 @@ const CheckoutPage = () => {
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderId, setOrderId] = useState(null);
   
+  // M-Pesa specific states
+  const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
+  const [checkoutRequestId, setCheckoutRequestId] = useState(null);
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [mpesaProcessing, setMpesaProcessing] = useState(false);
+  const [mpesaOrderPlaced, setMpesaOrderPlaced] = useState(false);
+  
   const [formData, setFormData] = useState({
     full_name: '',
     email: '',
@@ -48,37 +62,59 @@ const CheckoutPage = () => {
     postal_code: '',
     country: '',
     payment_method: 'CREDIT_CARD',
-    order_notes: ''
+    order_notes: '',
+    delivery_location: '',
+    is_pickup: false,
+    delivery_fee: 0
   });
 
   useEffect(() => {
-    const fetchCart = async () => {
+    const fetchCartAndProfile = async () => {
       try {
         setLoading(true);
-        const response = await cartAPI.getCart();
-        setCart(response.data.results[0]); // Ensure to set the first cart from results
+        const [cartResponse, profileResponse] = await Promise.all([
+          cartAPI.getCart(),
+          authAPI.getCurrentUser()
+        ]);
+
+        setCart(cartResponse.data.results[0]); // Ensure to set the first cart from results
+
+        const profileData = profileResponse.data;
+        setFormData((prevFormData) => ({
+          ...prevFormData,
+          full_name: `${profileData.first_name} ${profileData.last_name}`,
+          email: profileData.email,
+          phone_number: profileData.phone_number,
+          address: profileData.address
+        }));
       } catch (err) {
-        setError('Failed to load your cart. Please try again.');
-        console.error('Error fetching cart:', err);
+        setError('Failed to load your cart or profile information. Please try again.');
+        console.error('Error fetching cart or profile:', err);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchCart();
+    fetchCartAndProfile();
   }, []);
 
   const handleFormChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
-    });
+    const { name, value, type, checked } = e.target;
+    const newValue = type === 'checkbox' ? checked : value;
+    setFormData((prevFormData) => ({
+      ...prevFormData,
+      [name]: newValue,
+      delivery_fee: name === 'is_pickup' && checked ? 0 : 0 // Set delivery fee to 100 if not pickup
+    }));
   };
 
   const handleNext = () => {
     if (activeStep === steps.length - 1) {
-      handlePlaceOrder();
+      if (formData.payment_method === 'Mpesa') {
+        handleMpesaPayment();
+      } else {
+        handlePlaceOrder();
+      }
     } else {
       setActiveStep((prevActiveStep) => prevActiveStep + 1);
     }
@@ -108,30 +144,229 @@ const CheckoutPage = () => {
     return true;
   };
 
-  const handlePlaceOrder = async () => {
+  // M-Pesa payment handling
+  const handleMpesaPayment = async () => {
+    try {
+      setMpesaProcessing(true);
+      setMpesaDialogOpen(true);
+      
+      const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee);
+      
+      // Format the phone number for M-Pesa
+      let phoneNumber = formData.phone_number;
+      if (!phoneNumber.startsWith('+') && !phoneNumber.startsWith('0') && !phoneNumber.startsWith('254')) {
+        phoneNumber = '0' + phoneNumber;
+      }
+      
+      const mpesaPaymentData = {
+        phone_number: phoneNumber,
+        amount: orderTotal
+      };
+      
+      const response = await orderAPI.initiateMpesaPayment(mpesaPaymentData);
+      
+      if (response.data.success) {
+        setCheckoutRequestId(response.data.checkout_request_id);
+        // Poll for payment status
+        pollPaymentStatus(response.data.checkout_request_id);
+      } else {
+        setError(response.data.message || 'M-Pesa payment initiation failed');
+        setMpesaProcessing(false);
+      }
+    } catch (err) {
+      setError(err.response?.data?.message || 'An error occurred while processing M-Pesa payment');
+      setMpesaProcessing(false);
+    }
+  };
+
+  const pollPaymentStatus = async (checkoutId) => {
+    let statusInterval;
+    let timeoutId;
+    
+    // Store interval ID so we can clear it properly
+    statusInterval = setInterval(async () => {
+      try {
+        const statusResponse = await orderAPI.queryMpesaStatus({
+          checkout_request_id: checkoutId
+        });
+        
+        console.log('M-Pesa polling response:', statusResponse.data);
+        
+        // Check if we have a valid response with status
+        if (statusResponse.data && statusResponse.data.status) {
+          const resultCode = statusResponse.data.status.ResultCode;
+          
+          // Convert string ResultCode to number for comparison
+          const resultCodeNum = resultCode !== undefined ? parseInt(resultCode, 10) : null;
+          
+          if (resultCodeNum === 0) {
+            // Payment successful - IMPORTANT: clear both interval and timeout
+            clearInterval(statusInterval);
+            clearTimeout(timeoutId);
+            setPaymentStatus('Success');
+            // Place the order after successful payment
+            handlePlaceOrder(checkoutId);
+          } else if (resultCodeNum === 1032) {
+            // Transaction cancelled by user
+            clearInterval(statusInterval);
+            clearTimeout(timeoutId);
+            setPaymentStatus('Cancelled');
+            setMpesaProcessing(false);
+          } else if (resultCodeNum === 17) {
+            // Rule limited
+            clearInterval(statusInterval);
+            clearTimeout(timeoutId);
+            setPaymentStatus('Failed');
+            setError('Payment failed due to rule limitation. Please try again after few seconds or choose another payment method.');
+            setMpesaProcessing(false);
+          } else if (resultCode !== null && resultCode !== undefined && resultCodeNum !== 0) {
+            // Any other error code
+            clearInterval(statusInterval);
+            clearTimeout(timeoutId);
+            setPaymentStatus('Failed');
+            setMpesaProcessing(false);
+          }
+          // Continue polling if result code is not available yet
+        }
+      } catch (err) {
+        console.error('Error checking payment status:', err);
+        // Don't stop polling on network errors - just log them
+      }
+    }, 5000);
+    
+    // Set a maximum time for polling (2 minutes)
+    timeoutId = setTimeout(() => {
+      clearInterval(statusInterval);
+      // Only update state if no other status was set
+      if (!paymentStatus || paymentStatus === null) {
+        setPaymentStatus('Timeout');
+        setMpesaProcessing(false);
+      }
+    }, 120000);
+    
+    // Store the interval and timeout IDs for cleanup if component unmounts
+    return () => {
+      clearInterval(statusInterval);
+      clearTimeout(timeoutId);
+    };
+  };
+
+  const handleCloseMpesaDialog = () => {
+    setMpesaDialogOpen(false);
+    // Reset payment status if cancelled or failed
+    if (paymentStatus === 'Cancelled' || paymentStatus === 'Failed' || paymentStatus === 'Timeout') {
+      setPaymentStatus(null);
+      setCheckoutRequestId(null);
+    }
+  };
+
+  const handlePlaceOrder = async (mpesaCheckoutId = null) => {
     try {
       setLoading(true);
       const orderData = {
         ...formData,
         cart_id: cart.id,
-        order_total: cart.total_price // Include the order_total field
+        order_total: parseFloat(cart.total_price) + parseFloat(formData.delivery_fee),
+        phone_number: formData.phone_number,
       };
       
+      // If this is an M-Pesa payment, add the checkout ID
+      if (mpesaCheckoutId) {
+        orderData.mpesa_checkout_id = mpesaCheckoutId;
+        orderData.payment_status = 'COMPLETED'; // Use a valid choice for payment_status
+        setMpesaOrderPlaced(true);
+        console.log('Placing order with M-Pesa payment:', orderData);
+      }
+      
+      console.log('Placing order with data:', orderData);
       const response = await orderAPI.checkout(orderData);
+      console.log('Order placed successfully:', response.data);
       setOrderSuccess(true);
       setOrderId(response.data.id);
       
+      // If M-Pesa dialog is open, close it
+      if (mpesaDialogOpen) {
+        setMpesaDialogOpen(false);
+      }
+      
       // Clear the form and navigate to order confirmation
       setTimeout(() => {
-        navigate(`/orders/${response.data.id}`);
+        navigate(`/order/${response.data.id}`);
       }, 3000);
     } catch (err) {
+      console.error('Detailed error placing order:', err.response?.data || err);
       setError('Failed to place your order. Please try again.');
       console.error('Error placing order:', err);
     } finally {
       setLoading(false);
+      setMpesaProcessing(false);
     }
   };
+
+  const renderMpesaDialog = () => (
+    <Dialog
+      open={mpesaDialogOpen}
+      onClose={mpesaProcessing || paymentStatus === 'Success' ? undefined : handleCloseMpesaDialog}
+    >
+      <DialogTitle>M-Pesa Payment</DialogTitle>
+      <DialogContent>
+        {mpesaProcessing && !paymentStatus && (
+          <>
+            <DialogContentText>
+              Please check your phone and enter your M-Pesa PIN to complete the transaction.
+            </DialogContentText>
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+              <CircularProgress />
+            </Box>
+            {checkoutRequestId && (
+              <Typography variant="body2" color="text.secondary">
+                Checkout ID: {checkoutRequestId}
+              </Typography>
+            )}
+          </>
+        )}
+        
+        {paymentStatus === 'Success' && (
+          <>
+            <DialogContentText>
+              Payment successful! Processing your order...
+            </DialogContentText>
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
+              <CircularProgress />
+            </Box>
+          </>
+        )}
+        
+        {paymentStatus === 'Cancelled' && (
+          <DialogContentText>
+            The payment was cancelled. Please try again or choose another payment method.
+          </DialogContentText>
+        )}
+        
+        {paymentStatus === 'Failed' && (
+          <DialogContentText>
+            The payment failed to process. Please try again or choose another payment method.
+          </DialogContentText>
+        )}
+        
+        {paymentStatus === 'Timeout' && (
+          <DialogContentText>
+            The payment request timed out. Please check your M-Pesa messages to confirm if payment was processed.
+          </DialogContentText>
+        )}
+      </DialogContent>
+      <DialogActions>
+        {!mpesaProcessing && (
+          <Button onClick={handleCloseMpesaDialog}>Close</Button>
+        )}
+        {(paymentStatus === 'Cancelled' || paymentStatus === 'Failed' || paymentStatus === 'Timeout') && (
+          <Button variant="contained" onClick={handleMpesaPayment}>
+            Try Again
+          </Button>
+        )}
+      </DialogActions>
+    </Dialog>
+  );
 
   const renderShippingForm = () => (
     <Grid container spacing={2}>
@@ -219,6 +454,29 @@ const CheckoutPage = () => {
           onChange={handleFormChange}
         />
       </Grid>
+      <Grid item xs={12}>
+        <TextField
+          fullWidth
+          label="Delivery Location"
+          name="delivery_location"
+          value={formData.delivery_location}
+          onChange={handleFormChange}
+          disabled={formData.is_pickup}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={formData.is_pickup}
+              onChange={handleFormChange}
+              name="is_pickup"
+              color="primary"
+            />
+          }
+          label="I will pick up the item at the Office/Shop"
+        />
+      </Grid>
     </Grid>
   );
 
@@ -245,12 +503,27 @@ const CheckoutPage = () => {
           control={<Radio />} 
           label="Bank Transfer" 
         />
+        <FormControlLabel 
+          value="Mpesa" 
+          control={<Radio />} 
+          label="Mpesa" 
+        />
       </RadioGroup>
+      
+      {formData.payment_method === 'Mpesa' && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          <Typography variant="body2">
+            You will receive an M-Pesa payment request on your phone number: <strong>{formData.phone_number}</strong>
+          </Typography>
+        </Alert>
+      )}
     </FormControl>
   );
 
   const renderOrderSummary = () => {
     if (!cart || !cart.items) return <Typography>Loading cart data...</Typography>;
+    
+    const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee);
     
     return (
       <Box>
@@ -272,18 +545,34 @@ const CheckoutPage = () => {
                 <TableRow key={item.id}>
                   <TableCell>{item.product.name}</TableCell>
                   <TableCell align="right">
-                    ${parseFloat(item.product.discount_price || item.product.price).toFixed(2)}
+                    Ksh{parseFloat(item.product.discount_price || item.product.price).toFixed(2)}
                   </TableCell>
                   <TableCell align="right">{item.quantity}</TableCell>
-                  <TableCell align="right">${parseFloat(item.total_price).toFixed(2)}</TableCell>
+                  <TableCell align="right">Ksh{parseFloat(item.total_price).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
+              <TableRow>
+                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Subtotal:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  Ksh{parseFloat(cart.total_price).toFixed(2)}
+                </TableCell>
+              </TableRow>
+              <TableRow>
+                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
+                  Delivery Fee:
+                </TableCell>
+                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
+                  Ksh{parseFloat(formData.delivery_fee).toFixed(2)}
+                </TableCell>
+              </TableRow>
               <TableRow>
                 <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
                   Order Total:
                 </TableCell>
                 <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  ${parseFloat(cart.total_price).toFixed(2)}
+                  Ksh{orderTotal.toFixed(2)}
                 </TableCell>
               </TableRow>
             </TableBody>
@@ -304,6 +593,12 @@ const CheckoutPage = () => {
           {formData.order_notes && (
             <Typography><strong>Notes:</strong> {formData.order_notes}</Typography>
           )}
+          {formData.delivery_location && (
+            <Typography><strong>Delivery Location:</strong> {formData.delivery_location}</Typography>
+          )}
+          {formData.is_pickup && (
+            <Typography><strong>Pickup:</strong> Yes</Typography>
+          )}
         </Paper>
 
         <Typography variant="h6" sx={{ mb: 2 }}>
@@ -314,6 +609,7 @@ const CheckoutPage = () => {
             {formData.payment_method === 'CREDIT_CARD' && 'Credit Card'}
             {formData.payment_method === 'PAYPAL' && 'PayPal'}
             {formData.payment_method === 'BANK_TRANSFER' && 'Bank Transfer'}
+            {formData.payment_method === 'Mpesa' && 'Mpesa'}
           </Typography>
         </Paper>
       </Box>
@@ -431,6 +727,9 @@ const CheckoutPage = () => {
           </Box>
         </Box>
       </Paper>
+      
+      {/* M-Pesa Dialog */}
+      {renderMpesaDialog()}
     </Container>
   );
 };

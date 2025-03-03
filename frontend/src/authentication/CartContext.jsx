@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { cartAPI } from '../services/api';
+import { useAuth } from './AuthContext'; // Import useAuth to check authentication status
 
 const CartContext = createContext({
   cart: null,
@@ -16,16 +17,23 @@ export const CartProvider = ({ children }) => {
   const [cart, setCart] = useState(null);
   const [cartItemsCount, setCartItemsCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const { isAuthenticated } = useAuth(); // Get authentication status
 
   useEffect(() => {
-    refreshCart();
-  }, []);
+    if (isAuthenticated) {
+      console.log("Auth state changed in CartContext, refreshing cart");
+      refreshCart();
+    } else {
+      // Clear cart when logged out
+      setCart(null);
+      setCartItemsCount(0);
+    }
+  }, [isAuthenticated]); // Watch for auth changes // Only call refreshCart when the user is authenticated
 
   // Function to create a new cart if none exists
   const createCart = async () => {
     try {
       setLoading(true);
-      // Add a createCart function to your cartAPI service if it doesn't exist
       const response = await cartAPI.createCart();
       return response.data;
     } catch (error) {
@@ -41,13 +49,11 @@ export const CartProvider = ({ children }) => {
       setLoading(true);
       let currentCart = cart;
 
-      // If no cart exists, create one first
       if (!currentCart || !currentCart.id) {
         currentCart = await createCart();
         setCart(currentCart);
       }
 
-      // Now add the item to the cart
       await cartAPI.addToCart(currentCart.id, productId, quantity);
       await refreshCart();
     } catch (error) {
@@ -116,20 +122,14 @@ export const CartProvider = ({ children }) => {
       console.log('Cart API response:', response.data);
 
       if (response && response.data) {
-        // Check if the cart exists
         if (response.data.results && response.data.results.length > 0) {
-          // Cart exists, use it
           const cartData = response.data.results[0];
           setCart(cartData);
-          
-          // Calculate items count
           const itemsCount = cartData.items 
             ? cartData.items.reduce((count, item) => count + item.quantity, 0) 
             : 0;
-          
           setCartItemsCount(itemsCount);
         } else {
-          // No cart exists yet, set to null
           console.log('No existing cart found');
           setCart(null);
           setCartItemsCount(0);
