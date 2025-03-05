@@ -6,33 +6,18 @@ import {
   Container,
   Typography,
   Paper,
-  Grid,
-  TextField,
   Button,
   Stepper,
   Step,
   StepLabel,
   Divider,
-  FormControl,
-  FormControlLabel,
-  RadioGroup,
-  Radio,
-  FormLabel,
   Alert,
-  CircularProgress,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Checkbox,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions
+  CircularProgress
 } from '@mui/material';
+import ShippingForm from './ShippingForm';
+import PaymentForm from './PaymentForm';
+import OrderSummary from './OrderSummary';
+import MpesaDialog from './MpesaDialog';
 import { cartAPI, orderAPI, authAPI } from '../../services/api';
 
 const steps = ['Shipping Information', 'Payment Method', 'Review Order'];
@@ -61,7 +46,7 @@ const CheckoutPage = () => {
     city: '',
     postal_code: '',
     country: '',
-    payment_method: 'CREDIT_CARD',
+    payment_method: '',
     order_notes: '',
     delivery_location: '',
     is_pickup: false,
@@ -87,7 +72,7 @@ const CheckoutPage = () => {
           phone_number: profileData.phone_number,
           address: profileData.address
         }));
-      } catch (err) {
+      } catch ( err ) {
         setError('Failed to load your cart or profile information. Please try again.');
         console.error('Error fetching cart or profile:', err);
       } finally {
@@ -110,7 +95,7 @@ const CheckoutPage = () => {
 
   const handleNext = () => {
     if (activeStep === steps.length - 1) {
-      if (formData.payment_method === 'Mpesa') {
+      if (formData.payment_method === 'M-Pesa') {
         handleMpesaPayment();
       } else {
         handlePlaceOrder();
@@ -303,318 +288,27 @@ const CheckoutPage = () => {
     }
   };
 
-  const renderMpesaDialog = () => (
-    <Dialog
-      open={mpesaDialogOpen}
-      onClose={mpesaProcessing || paymentStatus === 'Success' ? undefined : handleCloseMpesaDialog}
-    >
-      <DialogTitle>M-Pesa Payment</DialogTitle>
-      <DialogContent>
-        {mpesaProcessing && !paymentStatus && (
-          <>
-            <DialogContentText>
-              Please check your phone and enter your M-Pesa PIN to complete the transaction.
-            </DialogContentText>
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress />
-            </Box>
-            {checkoutRequestId && (
-              <Typography variant="body2" color="text.secondary">
-                Checkout ID: {checkoutRequestId}
-              </Typography>
-            )}
-          </>
-        )}
-        
-        {paymentStatus === 'Success' && (
-          <>
-            <DialogContentText>
-              Payment successful! Processing your order...
-            </DialogContentText>
-            <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-              <CircularProgress />
-            </Box>
-          </>
-        )}
-        
-        {paymentStatus === 'Cancelled' && (
-          <DialogContentText>
-            The payment was cancelled. Please try again or choose another payment method.
-          </DialogContentText>
-        )}
-        
-        {paymentStatus === 'Failed' && (
-          <DialogContentText>
-            The payment failed to process. Please try again or choose another payment method.
-          </DialogContentText>
-        )}
-        
-        {paymentStatus === 'Timeout' && (
-          <DialogContentText>
-            The payment request timed out. Please check your M-Pesa messages to confirm if payment was processed.
-          </DialogContentText>
-        )}
-      </DialogContent>
-      <DialogActions>
-        {!mpesaProcessing && (
-          <Button onClick={handleCloseMpesaDialog}>Close</Button>
-        )}
-        {(paymentStatus === 'Cancelled' || paymentStatus === 'Failed' || paymentStatus === 'Timeout') && (
-          <Button variant="contained" onClick={handleMpesaPayment}>
-            Try Again
-          </Button>
-        )}
-      </DialogActions>
-    </Dialog>
-  );
-
   const renderShippingForm = () => (
-    <Grid container spacing={2}>
-      <Grid item xs={12}>
-        <TextField
-          required
-          fullWidth
-          label="Full Name"
-          name="full_name"
-          value={formData.full_name}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <TextField
-          required
-          fullWidth
-          label="Email"
-          name="email"
-          type="email"
-          value={formData.email}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <TextField
-          required
-          fullWidth
-          label="Phone Number"
-          name="phone_number"
-          value={formData.phone_number}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <TextField
-          required
-          fullWidth
-          label="Address"
-          name="address"
-          multiline
-          rows={2}
-          value={formData.address}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <TextField
-          required
-          fullWidth
-          label="City"
-          name="city"
-          value={formData.city}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12} md={6}>
-        <TextField
-          required
-          fullWidth
-          label="Postal Code"
-          name="postal_code"
-          value={formData.postal_code}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <TextField
-          required
-          fullWidth
-          label="Country"
-          name="country"
-          value={formData.country}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <TextField
-          fullWidth
-          label="Order Notes (Optional)"
-          name="order_notes"
-          multiline
-          rows={3}
-          value={formData.order_notes}
-          onChange={handleFormChange}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <TextField
-          fullWidth
-          label="Delivery Location"
-          name="delivery_location"
-          value={formData.delivery_location}
-          onChange={handleFormChange}
-          disabled={formData.is_pickup}
-        />
-      </Grid>
-      <Grid item xs={12}>
-        <FormControlLabel
-          control={
-            <Checkbox
-              checked={formData.is_pickup}
-              onChange={handleFormChange}
-              name="is_pickup"
-              color="primary"
-            />
-          }
-          label="I will pick up the item at the Office/Shop"
-        />
-      </Grid>
-    </Grid>
+    <ShippingForm formData={formData} handleFormChange={handleFormChange} />
   );
 
   const renderPaymentForm = () => (
-    <FormControl component="fieldset">
-      <FormLabel component="legend">Payment Method</FormLabel>
-      <RadioGroup
-        name="payment_method"
-        value={formData.payment_method}
-        onChange={handleFormChange}
-      >
-        <FormControlLabel 
-          value="CREDIT_CARD" 
-          control={<Radio />} 
-          label="Credit Card" 
-        />
-        <FormControlLabel 
-          value="PAYPAL" 
-          control={<Radio />} 
-          label="PayPal" 
-        />
-        <FormControlLabel 
-          value="BANK_TRANSFER" 
-          control={<Radio />} 
-          label="Bank Transfer" 
-        />
-        <FormControlLabel 
-          value="Mpesa" 
-          control={<Radio />} 
-          label="Mpesa" 
-        />
-      </RadioGroup>
-      
-      {formData.payment_method === 'Mpesa' && (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            You will receive an M-Pesa payment request on your phone number: <strong>{formData.phone_number}</strong>
-          </Typography>
-        </Alert>
-      )}
-    </FormControl>
+    <PaymentForm formData={formData} handleFormChange={handleFormChange} />
   );
 
-  const renderOrderSummary = () => {
-    if (!cart || !cart.items) return <Typography>Loading cart data...</Typography>;
-    
-    const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee);
-    
-    return (
-      <Box>
-        <Typography variant="h6" gutterBottom>
-          Order Summary
-        </Typography>
-        <TableContainer component={Paper} variant="outlined">
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Product</TableCell>
-                <TableCell align="right">Price</TableCell>
-                <TableCell align="right">Quantity</TableCell>
-                <TableCell align="right">Total</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {cart.items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>{item.product.name}</TableCell>
-                  <TableCell align="right">
-                    Ksh{parseFloat(item.product.discount_price || item.product.price).toFixed(2)}
-                  </TableCell>
-                  <TableCell align="right">{item.quantity}</TableCell>
-                  <TableCell align="right">Ksh{parseFloat(item.total_price).toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
-              <TableRow>
-                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                  Subtotal:
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Ksh{parseFloat(cart.total_price).toFixed(2)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                  Delivery Fee:
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Ksh{parseFloat(formData.delivery_fee).toFixed(2)}
-                </TableCell>
-              </TableRow>
-              <TableRow>
-                <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>
-                  Order Total:
-                </TableCell>
-                <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                  Ksh{orderTotal.toFixed(2)}
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </TableContainer>
+  const renderOrderSummary = () => (
+    <OrderSummary cart={cart} formData={formData} />
+  );
 
-        <Typography variant="h6" sx={{ mt: 4, mb: 2 }}>
-          Shipping Information
-        </Typography>
-        <Paper variant="outlined" sx={{ p: 2, mb: 3 }}>
-          <Typography><strong>Name:</strong> {formData.full_name}</Typography>
-          <Typography><strong>Email:</strong> {formData.email}</Typography>
-          <Typography><strong>Phone:</strong> {formData.phone_number}</Typography>
-          <Typography><strong>Address:</strong> {formData.address}</Typography>
-          <Typography><strong>City:</strong> {formData.city}</Typography>
-          <Typography><strong>Postal Code:</strong> {formData.postal_code}</Typography>
-          <Typography><strong>Country:</strong> {formData.country}</Typography>
-          {formData.order_notes && (
-            <Typography><strong>Notes:</strong> {formData.order_notes}</Typography>
-          )}
-          {formData.delivery_location && (
-            <Typography><strong>Delivery Location:</strong> {formData.delivery_location}</Typography>
-          )}
-          {formData.is_pickup && (
-            <Typography><strong>Pickup:</strong> Yes</Typography>
-          )}
-        </Paper>
-
-        <Typography variant="h6" sx={{ mb: 2 }}>
-          Payment Method
-        </Typography>
-        <Paper variant="outlined" sx={{ p: 2 }}>
-          <Typography>
-            {formData.payment_method === 'CREDIT_CARD' && 'Credit Card'}
-            {formData.payment_method === 'PAYPAL' && 'PayPal'}
-            {formData.payment_method === 'BANK_TRANSFER' && 'Bank Transfer'}
-            {formData.payment_method === 'Mpesa' && 'Mpesa'}
-          </Typography>
-        </Paper>
-      </Box>
-    );
-  };
+  const renderMpesaDialog = () => (
+    <MpesaDialog
+      mpesaDialogOpen={mpesaDialogOpen}
+      mpesaProcessing={mpesaProcessing}
+      paymentStatus={paymentStatus}
+      handleCloseMpesaDialog={handleCloseMpesaDialog}
+      handleMpesaPayment={handleMpesaPayment}
+    />
+  );
 
   const getStepContent = (step) => {
     switch (step) {
@@ -674,9 +368,12 @@ const CheckoutPage = () => {
           Your order has been placed successfully! Order #{orderId}
         </Alert>
         <Typography sx={{ mt: 2 }}>
-          Redirecting to order details...
+          Redirecting to cart...
         </Typography>
         <CircularProgress size={24} sx={{ mt: 2 }} />
+        {setTimeout(() => {
+          navigate('/cart');
+        }, 3000)}
       </Container>
     );
   }
@@ -701,7 +398,7 @@ const CheckoutPage = () => {
         <Box>
           {getStepContent(activeStep)}
           
-          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 4 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: '4' }}>
             {activeStep > 0 && (
               <Button
                 onClick={handleBack}

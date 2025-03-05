@@ -9,16 +9,40 @@ from django_filters.rest_framework import DjangoFilterBackend
 import logging
 import random
 
+
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.permissions import IsAdminUser
+from rest_framework.response import Response
+from django.db.models import Sum
+from .models import GuestCart, GuestCartItem, Order, Product
+from .serializers import OrderSerializer
+
 from django.conf import settings
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 from rest_framework.generics import GenericAPIView
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
+
+import json
+from rest_framework.generics import GenericAPIView
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+from django.utils import timezone
+import random
+from django.core.mail import send_mail
+from django.conf import settings
+
+# Set up logger
+logger = logging.getLogger(__name__)
+
 
 # Get the custom user model
 CustomUser = get_user_model()
@@ -28,19 +52,44 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     Category, Product,
-    Cart, CartItem, Order,
+    Cart, CartItem, Order, ProductImage,
 )
 from .serializers import (
     OTPSerializer, PasswordChangeSerializer, UserLoginSerializer, UserRegistrationSerializer, UserProfileSerializer,
     CategorySerializer, CategoryDetailSerializer,
     ProductListSerializer, ProductDetailSerializer,
-    CartSerializer,OrderSerializer, CheckoutSerializer
+    CartSerializer,OrderSerializer, CheckoutSerializer, GuestCartSerializer
 )
 from .permissions import IsAdminOrReadOnly, IsOwnerOrAdmin
+
+from django_filters import rest_framework as django_filters
 
 class UserRegistrationView(GenericAPIView):
     permission_classes = (AllowAny,)
     serializer_class = UserRegistrationSerializer
+
+    def migrate_guest_cart(self, request, user):
+        session_id = request.session.session_key
+        if (session_id):
+            try:
+                guest_cart = GuestCart.objects.get(session_id=session_id)
+                user_cart, created = Cart.objects.get_or_create(user=user)
+
+                # Migrate items from guest cart to user cart
+                for guest_item in guest_cart.items.all():
+                    cart_item, created = CartItem.objects.get_or_create(
+                        cart=user_cart,
+                        product=guest_item.product,
+                        defaults={'quantity': guest_item.quantity}
+                    )
+                    if not created:
+                        cart_item.quantity += guest_item.quantity
+                        cart_item.save()
+
+                # Delete the guest cart
+                guest_cart.delete()
+            except GuestCart.DoesNotExist:
+                pass
     
     def post(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -79,6 +128,9 @@ class UserRegistrationView(GenericAPIView):
             # Store user_id and OTP in session
             request.session['user_id'] = user.id
             request.session['otp'] = otp
+            
+            # Migrate guest cart if exists
+            self.migrate_guest_cart(request, user)
             
             # Send verification email
             if settings.SEND_OTP_VIA_EMAIL:
@@ -126,21 +178,6 @@ class UserRegistrationView(GenericAPIView):
                 'error': 'Registration failed',
                 'message': 'An unexpected error occurred during registration.'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
-import logging
-import json
-from rest_framework.generics import GenericAPIView
-from rest_framework.permissions import AllowAny
-from rest_framework.response import Response
-from rest_framework import status
-from django.utils import timezone
-import random
-from django.core.mail import send_mail
-from django.conf import settings
-
-# Set up logger
-logger = logging.getLogger(__name__)
 
 class LoginView(GenericAPIView):
     permission_classes = (AllowAny,)
@@ -345,37 +382,73 @@ class UserProfileView(APIView):
 class CategoryViewSet(viewsets.ModelViewSet):
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAdminOrReadOnly]
     lookup_field = 'slug'
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['name']
-    
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return CategoryDetailSerializer
-        return CategorySerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        queryset = queryset.annotate(
+            product_count=Count('products', filter=Q(products__is_available=True))
+        )
+        categories_list = list(queryset)  # Force evaluation
+        print("Debug - Categories found:", len(categories_list))
+        for cat in categories_list:
+            print(f"Category: {cat.name}, Products: {cat.product_count}")
+        return queryset
+
+    def list(self, request, *args, **kwargs):
+        response = super().list(request, *args, **kwargs)
+        print("Debug - Response data:", response.data)
+        return response
+
+class ProductFilter(django_filters.FilterSet):
+    price_min = django_filters.NumberFilter(field_name="price", lookup_expr='gte')
+    price_max = django_filters.NumberFilter(field_name="price", lookup_expr='lte')
+    category = django_filters.CharFilter(field_name='category__slug')
+    inStock = django_filters.BooleanFilter(field_name='stock', lookup_expr='gt', exclude=True)
+
+    class Meta:
+        model = Product
+        fields = ['category', 'is_available', 'price_min', 'price_max', 'inStock']
+
+from django.db.models import Count, Q
+from django.utils import timezone
+from datetime import timedelta
 
 class ProductViewSet(viewsets.ModelViewSet):
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().prefetch_related('images')
     serializer_class = ProductListSerializer
-    permission_classes = [IsAdminOrReadOnly]
-    lookup_field = 'slug'
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
-    filterset_fields = ['category', 'is_available']
+    filterset_fields = ['category__slug']
     search_fields = ['name', 'description']
-    ordering_fields = ['price', 'created_at']
-    
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return ProductDetailSerializer
-        return ProductListSerializer
+    ordering_fields = ['created_at', 'price', 'name']
+    lookup_field = 'slug'
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        category_slug = self.request.query_params.get('category', None)
+        if (category_slug):
+            queryset = queryset.filter(category__slug=category_slug)
+        return queryset
     
     @action(detail=False, methods=['get'])
     def featured(self, request):
-        """Return available products with discount"""
-        products = Product.objects.filter(is_available=True, discount_price__isnull=False)[:10]
-        serializer = ProductListSerializer(products, many=True, context={'request': request})
+        featured_products = Product.objects.filter(is_feature=True).prefetch_related('images')
+        serializer = self.get_serializer(featured_products, many=True)
         return Response(serializer.data)
+    
+    @action(detail=True, methods=['delete'])
+    def delete_image(self, request, slug=None):
+        image_id = request.data.get('image_id')
+        try:
+            image = ProductImage.objects.get(id=image_id, product__slug=slug)
+            image.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except ProductImage.DoesNotExist:
+            return Response(
+                {"error": "Image not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
     
     @action(detail=False, methods=['get'])
     def search(self, request):
@@ -383,53 +456,131 @@ class ProductViewSet(viewsets.ModelViewSet):
         if query:
             products = Product.objects.filter(
                 Q(name__icontains=query) | 
-                Q(description__icontains=query) |
+                Q(description__icontins=query) |
                 Q(category__name__icontains=query)
             ).distinct()
             serializer = ProductListSerializer(products, many=True, context={'request': request})
             return Response(serializer.data)
         return Response([])
 
+    @action(detail=False, methods=['get'])
+    def popular(self, request):
+        one_week_ago = timezone.now() - timedelta(days=7)
+        
+        popular_products = Product.objects.annotate(
+            weekly_orders=Count(
+                'orderitem',
+                filter=Q(
+                    orderitem__order__created_at__gte=one_week_ago,
+                    orderitem__order__order_status='DELIVERED'  # Changed to match Order model
+                )
+            )
+        ).filter(
+            weekly_orders__gt=0
+        ).order_by('-weekly_orders')[:6]
+
+        serializer = self.get_serializer(popular_products, many=True)
+        return Response(serializer.data)
+
 class CartViewSet(viewsets.ModelViewSet):
-    serializer_class = CartSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    
+    permission_classes = [permissions.AllowAny]
+
+    def get_serializer_class(self):
+        if self.action in ['guest_cart', 'add_guest_item']:
+            return GuestCartSerializer
+        return CartSerializer
+
     def get_queryset(self):
-        return Cart.objects.filter(user=self.request.user)
-    
-    def perform_create(self, serializer):
-        # Check if user already has a cart
-        try:
-            cart = Cart.objects.get(user=self.request.user)
-            return Response({"error": "User already has a cart"}, status=status.HTTP_400_BAD_REQUEST)
-        except Cart.DoesNotExist:
-            serializer.save(user=self.request.user)
-    
+        if self.request.user.is_authenticated:
+            return Cart.objects.filter(user=self.request.user)
+        return Cart.objects.none()
+
     @action(detail=True, methods=['post'])
     def add_item(self, request, pk=None):
         cart = self.get_object()
         product_id = request.data.get('product_id')
-        quantity = request.data.get('quantity', 1)
+        quantity = int(request.data.get('quantity', 1))
         
         try:
             product = Product.objects.get(id=product_id)
-            if product.stock < quantity:
-                return Response({"error": "Not enough stock available"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Reduce the stock quantity
-            product.stock -= quantity
-            product.save()
+            # Check if product is in stock
+            if not product.is_in_stock:
+                return Response(
+                    {'error': 'Product is out of stock'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
             
-            # Add item to cart
-            cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+            # Check if there's sufficient stock
+            if not product.has_sufficient_stock(quantity):
+                return Response(
+                    {'error': f'Only {product.stock} items available'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            cart_item, created = CartItem.objects.get_or_create(
+                cart=cart,
+                product=product,
+                defaults={'quantity': quantity}
+            )
+            
             if not created:
-                cart_item.quantity += quantity
+                new_quantity = cart_item.quantity + quantity
+                if not product.has_sufficient_stock(new_quantity):
+                    return Response(
+                        {'error': f'Cannot add more items. Only {product.stock} available'}, 
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                cart_item.quantity = new_quantity
+                cart_item.save()
+            
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
+            return Response(serializer.data)
+            
+        except Product.DoesNotExist:
+            return Response(
+                {'error': 'Product not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=True, methods=['post'])
+    def update_item(self, request, pk=None):
+        cart = self.get_object()
+        cart_item_id = request.data.get('cart_item_id')
+        quantity = int(request.data.get('quantity', 1))
+        
+        try:
+            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
+            product = cart_item.product
+            
+            # Check if product is in stock
+            if not product.is_in_stock:
+                return Response(
+                    {'error': 'Product is out of stock'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Check if there's sufficient stock
+            if not product.has_sufficient_stock(quantity):
+                return Response(
+                    {'error': f'Only {product.stock} items available'}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            cart_item.quantity = quantity
             cart_item.save()
             
-            return Response({"message": "Item added to cart"}, status=status.HTTP_200_OK)
-        except Product.DoesNotExist:
-            return Response({"error": "Product not found"}, status=status.HTTP_404_NOT_FOUND)
-    
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
+            return Response(serializer.data)
+            
+        except CartItem.DoesNotExist:
+            return Response(
+                {'error': 'Cart item not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
     @action(detail=True, methods=['post'])
     def remove_item(self, request, pk=None):
         cart = self.get_object()
@@ -437,46 +588,154 @@ class CartViewSet(viewsets.ModelViewSet):
         
         try:
             cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
-            # Restore the stock quantity
-            cart_item.product.stock += cart_item.quantity
-            cart_item.product.save()
-            
             cart_item.delete()
-            return Response({"message": "Item removed from cart"}, status=status.HTTP_200_OK)
-        except CartItem.DoesNotExist:
-            return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
-    
-    @action(detail=True, methods=['post'])
-    def update_item(self, request, pk=None):
-        cart = self.get_object()
-        cart_item_id = request.data.get('cart_item_id')
-        quantity = request.data.get('quantity', 1)
-        
-        try:
-            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
-            if cart_item.product.stock + cart_item.quantity < quantity:
-                return Response({"error": "Not enough stock available"}, status=status.HTTP_400_BAD_REQUEST)
             
-            # Update the stock quantity
-            cart_item.product.stock += cart_item.quantity - quantity
-            cart_item.product.save()
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
+            return Response(serializer.data)
             
-            cart_item.quantity = quantity
-            cart_item.save()
-            return Response({"message": "Cart item updated"}, status=status.HTTP_200_OK)
         except CartItem.DoesNotExist:
-            return Response({"error": "Cart item not found"}, status=status.HTTP_404_NOT_FOUND)
-    
+            return Response({'error': 'Cart item not found'}, status=status.HTTP_404_NOT_FOUND)
+
     @action(detail=True, methods=['post'])
     def clear(self, request, pk=None):
         cart = self.get_object()
-        for cart_item in cart.items.all():
-            # Restore the stock quantity
-            cart_item.product.stock += cart_item.quantity
-            cart_item.product.save()
-            
-            cart_item.delete()
-        return Response({"message": "Cart cleared"}, status=status.HTTP_200_OK)
+        cart.items.all().delete()
+        
+        cart.refresh_from_db()
+        serializer = self.get_serializer(cart)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def migrate_cart(self, request):
+        """Migrate guest cart to user cart"""
+        if not request.user.is_authenticated:
+            return Response(
+                {"error": "User not authenticated"}, 
+                status=status.HTTP_401_UNAUTHORIZED
+            )
+
+        user_session_id = request.data.get('user_session_id')
+        if not user_session_id:
+            return Response(
+                {"error": "Missing user session ID"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # First check if user already has a cart
+            user_cart = Cart.objects.get_or_create(user=request.user)[0]
+
+            # Then check for guest cart
+            try:
+                guest_cart = GuestCart.objects.get(user_session_id=user_session_id)
+            except GuestCart.DoesNotExist:
+                # If no guest cart exists, just return the empty user cart
+                return Response(CartSerializer(user_cart).data)
+
+            # Migrate items if guest cart exists
+            for guest_item in guest_cart.items.all():
+                cart_item, created = CartItem.objects.get_or_create(
+                    cart=user_cart,
+                    product=guest_item.product,
+                    defaults={'quantity': guest_item.quantity}
+                )
+                if not created:
+                    cart_item.quantity += guest_item.quantity
+                    cart_item.save()
+
+            # Delete guest cart after successful migration
+            guest_cart.delete()
+
+            return Response(CartSerializer(user_cart).data)
+
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['post'])
+    def add_guest_item(self, request):
+        """Add item to guest cart, creating cart if needed"""
+        user_session_id = request.data.get('user_session_id')
+        product_id = request.data.get('product_id')
+        quantity = request.data.get('quantity', 1)
+
+        if not user_session_id or not product_id:
+            return Response(
+                {"error": "Missing required fields"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            # Clean up expired carts first
+            GuestCart.cleanup_expired_carts()
+
+            # Get or create guest cart
+            guest_cart = GuestCart.objects.filter(
+                user_session_id=user_session_id,
+                expires_at__gt=timezone.now()
+            ).first()
+
+            if not guest_cart:
+                guest_cart = GuestCart.objects.create(
+                    session_id=f"guest_{timezone.now().timestamp()}_{user_session_id}",
+                    user_session_id=user_session_id
+                )
+
+            # Add item to cart
+            product = Product.objects.get(id=product_id)
+            cart_item, created = GuestCartItem.objects.get_or_create(
+                cart=guest_cart,
+                product=product,
+                defaults={'quantity': quantity}
+            )
+
+            if not created:
+                cart_item.quantity += quantity
+                cart_item.save()
+
+            serializer = GuestCartSerializer(guest_cart)
+            return Response(serializer.data)
+
+        except Product.DoesNotExist:
+            return Response(
+                {"error": "Product not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {"error": str(e)}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=False, methods=['get'])
+    def guest_cart(self, request):
+        """Get guest cart if it exists and is not expired"""
+        user_session_id = request.query_params.get('user_session_id')
+        
+        if not user_session_id:
+            return Response(
+                {"error": "Missing user_session_id"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Clean up expired carts
+        GuestCart.cleanup_expired_carts()
+
+        try:
+            cart = GuestCart.objects.get(
+                user_session_id=user_session_id,
+                expires_at__gt=timezone.now()
+            )
+            serializer = GuestCartSerializer(cart)
+            return Response(serializer.data)
+        except GuestCart.DoesNotExist:
+            return Response(
+                {"error": "No active cart found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
@@ -550,15 +809,6 @@ class ResendOTPView(GenericAPIView):
             return Response({"error": "User not found"}, status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.permissions import IsAdminUser
-from rest_framework.response import Response
-from django.db.models import Sum
-from .models import Order, Product
-from .serializers import OrderSerializer
 
 class AdminDashboardViewSet(viewsets.ViewSet):
     permission_classes = [IsAdminUser]

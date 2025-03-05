@@ -1,98 +1,124 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { cartAPI } from '../services/api';
-import { useAuth } from './AuthContext'; // Import useAuth to check authentication status
+import { useAuth } from '../authentication/AuthContext';
+import { useSession } from './SessionContext';
+import { productsAPI } from '../services/api';
 
-const CartContext = createContext({
-  cart: null,
-  cartItemsCount: 0,
-  loading: false,
-  addToCart: () => Promise.resolve(),
-  removeFromCart: () => Promise.resolve(),
-  updateCartItem: () => Promise.resolve(),
-  clearCart: () => Promise.resolve(),
-  refreshCart: () => Promise.resolve()
-});
+const CartContext = createContext(null);
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
+};
 
 export const CartProvider = ({ children }) => {
+  // Initialize state first
   const [cart, setCart] = useState(null);
-  const [cartItemsCount, setCartItemsCount] = useState(0);
   const [loading, setLoading] = useState(false);
-  const { isAuthenticated } = useAuth(); // Get authentication status
+  const [error, setError] = useState(null);
+
+  // Get context values after initialization
+  const auth = useAuth();
+  const { sessionId } = useSession();
+  const isAuthenticated = auth?.isAuthenticated || false;
+
+  const fetchCart = async () => {
+    if (!isAuthenticated && !sessionId) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      const response = isAuthenticated
+        ? await productsAPI.getUserCart()
+        : await productsAPI.getGuestCart(sessionId);
+      setCart(response.data);
+    } catch (err) {
+      console.error('Error fetching cart:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (isAuthenticated) {
-      console.log("Auth state changed in CartContext, refreshing cart");
-      refreshCart();
-    } else {
-      // Clear cart when logged out
-      setCart(null);
-      setCartItemsCount(0);
-    }
-  }, [isAuthenticated]); // Watch for auth changes // Only call refreshCart when the user is authenticated
+    fetchCart();
+  }, [isAuthenticated, sessionId]);
 
-  // Function to create a new cart if none exists
-  const createCart = async () => {
-    try {
-      setLoading(true);
-      const response = await cartAPI.createCart();
-      return response.data;
-    } catch (error) {
-      console.error('Failed to create a new cart:', error);
-      throw error;
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addToCart = async (productId, quantity) => {
-    try {
-      setLoading(true);
-      let currentCart = cart;
-
-      if (!currentCart || !currentCart.id) {
-        currentCart = await createCart();
-        setCart(currentCart);
+  useEffect(() => {
+    const migrateCartIfNeeded = async () => {
+      try {
+        // Only attempt migration if we have a session ID and user just logged in
+        if (isAuthenticated && sessionId) {
+          const guestCart = await productsAPI.getGuestCart(sessionId);
+          
+          // Only migrate if guest cart exists and has items
+          if (guestCart?.data?.items?.length > 0) {
+            await productsAPI.migrateGuestCart(sessionId);
+            // Clear session ID after successful migration
+            localStorage.removeItem('userSessionId');
+          }
+        }
+      } catch (error) {
+        // Ignore "cart not found" errors as they're expected for new users
+        if (!error.response?.data?.error?.includes('not found')) {
+          console.error('Cart migration error:', error);
+        }
       }
+    };
 
-      await cartAPI.addToCart(currentCart.id, productId, quantity);
-      await refreshCart();
+    migrateCartIfNeeded();
+  }, [isAuthenticated, sessionId]);
+
+  const addToCart = async (productId, quantity = 1) => {
+    try {
+      setLoading(true);
+      const response = isAuthenticated
+        ? await productsAPI.addToUserCart(productId, quantity)
+        : await productsAPI.addToGuestCart(sessionId, productId, quantity);
+      
+      setCart(response.data);
+      return true;
     } catch (error) {
-      console.error('Failed to add item to cart:', error);
-      throw error;
+      console.error('Error adding to cart:', error);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const removeFromCart = async (cartItemId) => {
+  const removeFromCart = async (itemId) => {
     try {
       setLoading(true);
-      if (cart && cart.id) {
-        await cartAPI.removeFromCart(cart.id, cartItemId);
-        await refreshCart();
+      if (isAuthenticated) {
+        await productsAPI.removeFromUserCart(itemId);
       } else {
-        throw new Error('No cart available');
+        await productsAPI.removeFromGuestCart(sessionId, itemId);
       }
+      await fetchCart(); // Refresh cart after removal
+      return true;
     } catch (error) {
-      console.error('Failed to remove item from cart:', error);
-      throw error;
+      console.error('Error removing from cart:', error);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const updateCartItem = async (cartItemId, quantity) => {
+  const updateCartItem = async (itemId, quantity) => {
     try {
       setLoading(true);
-      if (cart && cart.id) {
-        await cartAPI.updateCartItem(cart.id, cartItemId, quantity);
-        await refreshCart();
+      if (isAuthenticated) {
+        await productsAPI.updateUserCartItem(itemId, quantity);
       } else {
-        throw new Error('No cart available');
+        await productsAPI.updateGuestCartItem(sessionId, itemId, quantity);
       }
+      await fetchCart(); // Refresh cart after update
+      return true;
     } catch (error) {
-      console.error('Failed to update cart item:', error);
-      throw error;
+      console.error('Error updating cart item:', error);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -101,67 +127,37 @@ export const CartProvider = ({ children }) => {
   const clearCart = async () => {
     try {
       setLoading(true);
-      if (cart && cart.id) {
-        await cartAPI.clearCart(cart.id);
-        await refreshCart();
+      if (isAuthenticated) {
+        await productsAPI.clearUserCart();
       } else {
-        throw new Error('No cart available');
+        await productsAPI.clearGuestCart(sessionId);
       }
+      setCart(null);
+      return true;
     } catch (error) {
-      console.error('Failed to clear cart:', error);
-      throw error;
+      console.error('Error clearing cart:', error);
+      return false;
     } finally {
       setLoading(false);
     }
   };
 
-  const refreshCart = async () => {
-    try {
-      setLoading(true);
-      const response = await cartAPI.getCart();
-      console.log('Cart API response:', response.data);
-
-      if (response && response.data) {
-        if (response.data.results && response.data.results.length > 0) {
-          const cartData = response.data.results[0];
-          setCart(cartData);
-          const itemsCount = cartData.items 
-            ? cartData.items.reduce((count, item) => count + item.quantity, 0) 
-            : 0;
-          setCartItemsCount(itemsCount);
-        } else {
-          console.log('No existing cart found');
-          setCart(null);
-          setCartItemsCount(0);
-        }
-      } else {
-        console.error('No cart data received');
-        setCart(null);
-        setCartItemsCount(0);
-      }
-    } catch (error) {
-      console.error('Failed to refresh cart:', error);
-      setCart(null);
-      setCartItemsCount(0);
-    } finally {
-      setLoading(false);
-    }
+  const value = {
+    cart,
+    loading,
+    error,
+    setCart,
+    fetchCart,
+    addToCart,
+    removeFromCart,
+    updateCartItem,
+    clearCart,
+    refreshCart: fetchCart
   };
 
   return (
-    <CartContext.Provider value={{
-      cart,
-      cartItemsCount,
-      loading,
-      addToCart,
-      removeFromCart,
-      updateCartItem,
-      clearCart,
-      refreshCart
-    }}>
+    <CartContext.Provider value={value}>
       {children}
     </CartContext.Provider>
   );
 };
-
-export const useCart = () => useContext(CartContext);

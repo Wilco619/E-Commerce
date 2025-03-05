@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'api',
     'mpesaconfig',
     'django_daraja',
+    # Remove 'django_redis' from here
 ]
 
 MIDDLEWARE = [
@@ -63,6 +64,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'api.middleware.CheckoutMiddleware',
     
 ]
 
@@ -75,27 +77,31 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
+        'rest_framework.filters.SearchFilter',
+        'rest_framework.filters.OrderingFilter',
     ],
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 10,
+    'PAGE_SIZE': 12,
 }
 
 # JWT settings
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=30),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
-    'ROTATE_REFRESH_TOKENS': False,
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=24),  # Changed from 30 minutes to 24 hours
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),   # Changed from 1 day to 7 days
+    'ROTATE_REFRESH_TOKENS': True,                 # Enable refresh token rotation
     'BLACKLIST_AFTER_ROTATION': True,
-    'UPDATE_LAST_LOGIN': False,
-    'ALGORITHM': 'HS256',
-    'SIGNING_KEY': SECRET_KEY,
-    'VERIFYING_KEY': None,
+    'UPDATE_LAST_LOGIN': True,
     'AUTH_HEADER_TYPES': ('Bearer',),
-    'USER_ID_FIELD': 'id',
-    'USER_ID_CLAIM': 'user_id',
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
     'TOKEN_TYPE_CLAIM': 'token_type',
     'JTI_CLAIM': 'jti',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'TOKEN_OBTAIN_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenObtainPairSerializer',
+    'TOKEN_REFRESH_SERIALIZER': 'rest_framework_simplejwt.serializers.TokenRefreshSerializer',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(hours=24),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
 }
 
 ROOT_URLCONF = 'backend.urls'
@@ -179,6 +185,7 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -217,3 +224,38 @@ MPESA_CONFIG = {
     'MPESA_C2B_VALIDATION_URL': f"{os.getenv('MPESA_CALLBACK_BASE_URL')}/api/mpesa/c2b-validation/",
     'MPESA_STK_PUSH_CALLBACK_URL': f"{os.getenv('MPESA_CALLBACK_BASE_URL')}/api/mpesa/stk-push-callback/",
 }
+
+# Remove the CACHES configuration
+# Delete this entire block
+# CACHES = {
+#     'default': {
+#         'BACKEND': 'django_redis.cache.RedisCache',
+#         'LOCATION': 'redis://127.0.0.1:6379/1',
+#         'OPTIONS': {
+#             'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+#             'MAX_ENTRIES': 1000000,
+#         }
+#     }
+# }
+
+# Update session configuration
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
+# Remove SESSION_CACHE_ALIAS since we're not using Redis
+SESSION_COOKIE_AGE = 86400  # 24 hours in seconds
+SESSION_COOKIE_SECURE = True
+SESSION_COOKIE_HTTPONLY = True
+SESSION_SAVE_EVERY_REQUEST = False
+
+# Add database indexing for better session query performance
+SESSION_DB_ALIAS = 'default'
+
+# Security settings for large-scale deployment
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+
+#/usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions
+#0 */12 * * * /usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions >> /home/username/logs/session_cleanup.log 2>&1
+# Run every hour
+#0 * * * * /path/to/your/python /path/to/your/manage.py cleanup_guest_carts

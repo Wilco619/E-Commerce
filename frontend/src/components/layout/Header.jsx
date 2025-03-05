@@ -1,15 +1,15 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
 import {
   AppBar, Toolbar, Typography, Button, IconButton, Badge,
   Box, Menu, MenuItem, InputBase, Avatar, Drawer, List, ListItem,
-  ListItemText, ListItemIcon, Divider, useMediaQuery, Tooltip
+  ListItemText, ListItemIcon, Divider, useMediaQuery, Tooltip, CircularProgress
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
   ShoppingCart, Menu as MenuIcon, Person, Search,
   Logout, Dashboard, Inventory, Category, Receipt,
-  AccountCircle, Home, Store
+  AccountCircle, Home, Store, ShoppingBasket, Login, PersonAdd
 } from '@mui/icons-material';
 import { styled, alpha } from '@mui/material/styles';
 import { useAuth } from '../../authentication/AuthContext';
@@ -65,10 +65,27 @@ const LogoText = styled(Typography)(({ theme }) => ({
 }));
 
 const Header = () => {
+  const [authStateChangeTrigger, setAuthStateChangeTrigger] = useState(0);
+
+  // Event listener for authentication state changes
+  useEffect(() => {
+    const handleAuthStateChange = () => {
+      // Force a re-render by updating local state or triggering a state change
+      setAuthStateChangeTrigger(prev => prev + 1); // This will trigger a re-render
+    };
+
+    window.addEventListener('authStateChanged', handleAuthStateChange);
+    
+    // Cleanup the event listener on component unmount
+    return () => {
+      window.removeEventListener('authStateChanged', handleAuthStateChange);
+    };
+  }, []);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user, isAdmin, isAuthenticated, logout } = useAuth();
-  const { cartItemsCount } = useCart();
+  const { user, isAdmin, isAuthenticated, logout, loading: authLoading } = useAuth();
+  // This component will re-render when authStateVersion changes
+  const { cart, loading: cartLoading } = useCart();
   const navigate = useNavigate();
   
   // State
@@ -168,6 +185,34 @@ const Header = () => {
     </>
   ), [navigateAndCloseMenus]);
 
+  // Calculate cart items count
+  const cartItemsCount = useMemo(() => {
+    if (cartLoading) return 0;
+    return cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
+  }, [cart, cartLoading]);
+
+  // Handle cart click based on auth status
+  const handleCartClick = useCallback((e) => {
+    e.preventDefault();
+    if (!isAuthenticated && cartItemsCount > 0) {
+      // Store the current cart URL to redirect after login
+      sessionStorage.setItem('redirectAfterLogin', '/cart');
+      navigate('/login');
+    } else {
+      navigate('/cart');
+    }
+  }, [isAuthenticated, cartItemsCount, navigate]);
+
+  // Handle checkout redirect
+  const handleCheckoutClick = useCallback(() => {
+    if (!isAuthenticated) {
+      sessionStorage.setItem('redirectAfterLogin', '/checkout');
+      navigate('/login');
+    } else {
+      navigate('/checkout');
+    }
+  }, [isAuthenticated, navigate]);
+
   return (
     <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
       <Toolbar>
@@ -188,7 +233,7 @@ const Header = () => {
           component={RouterLink}
           to="/"
         >
-          SHOP<Box component="span" sx={{ color: 'primary.light' }}>HUB</Box>
+          JEMSA<Box component="span" sx={{ color: 'primary.light' }}>TECHS</Box>
         </LogoText>
         
         {!isMobile && (
@@ -228,87 +273,107 @@ const Header = () => {
               component={RouterLink} 
               to="/cart"
               aria-label={`${cartItemsCount} items in cart`}
+              onClick={handleCartClick}
+              disabled={cartLoading}
             >
               <Badge badgeContent={cartItemsCount} color="error">
-                <ShoppingCart />
+                {cartLoading ? (
+                  <CircularProgress size={24} color="inherit" />
+                ) : (
+                  <ShoppingCart />
+                )}
               </Badge>
             </IconButton>
           </Tooltip>
           
           {isAuthenticated ? (
-            <>
-              <Tooltip title="Account">
-                <IconButton
-                  onClick={handleUserMenuOpen}
-                  color="inherit"
-                  aria-controls="user-menu"
-                  aria-haspopup="true"
-                >
-                  <Avatar 
-                    sx={{ 
-                      width: 32, 
-                      height: 32, 
-                      bgcolor: 'primary.main',
-                      fontSize: '0.875rem'
-                    }}
-                  >
-                    {userInitial}
-                  </Avatar>
-                </IconButton>
-              </Tooltip>
-              
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <IconButton
+                onClick={handleUserMenuOpen}
+                color="inherit"
+                aria-label="user menu"
+              >
+                <Avatar sx={{ bgcolor: 'secondary.main' }}>
+                  {user?.username?.[0]?.toUpperCase() || <Person />}
+                </Avatar>
+              </IconButton>
               <Menu
-                id="user-menu"
                 anchorEl={userMenuAnchor}
-                anchorOrigin={{
-                  vertical: 'bottom',
-                  horizontal: 'right',
-                }}
-                keepMounted
-                transformOrigin={{
-                  vertical: 'top',
-                  horizontal: 'right',
-                }}
                 open={Boolean(userMenuAnchor)}
                 onClose={handleUserMenuClose}
               >
-                <MenuItem onClick={() => navigateAndCloseMenus('/profile')}>
-                  <ListItemIcon>
-                    <Person fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="Profile" />
-                </MenuItem>
-                
-                <MenuItem onClick={() => navigateAndCloseMenus('/orders')}>
-                  <ListItemIcon>
-                    <Receipt fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="My Orders" />
-                </MenuItem>
-                
-                {isAdmin && adminMenuItems}
-                
-                <Divider />
-                
-                <MenuItem onClick={handleLogout}>
-                  <ListItemIcon>
-                    <Logout fontSize="small" />
-                  </ListItemIcon>
-                  <ListItemText primary="Logout" />
-                </MenuItem>
+                {[
+                  <MenuItem 
+                    key="profile" 
+                    component={RouterLink} 
+                    to="/profile"
+                    onClick={handleUserMenuClose}
+                  >
+                    <ListItemIcon>
+                      <Person fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Profile</ListItemText>
+                  </MenuItem>,
+                  <MenuItem 
+                    key="orders" 
+                    component={RouterLink} 
+                    to="/orders"
+                    onClick={handleUserMenuClose}
+                  >
+                    <ListItemIcon>
+                      <Receipt fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Orders</ListItemText>
+                  </MenuItem>,
+                  user?.user_type === 'ADMIN' && (
+                    <MenuItem 
+                      key="dashboard" 
+                      component={RouterLink} 
+                      to="/admin"
+                      onClick={handleUserMenuClose}
+                    >
+                      <ListItemIcon>
+                        <Dashboard fontSize="small" />
+                      </ListItemIcon>
+                      <ListItemText>Dashboard</ListItemText>
+                    </MenuItem>
+                  ),
+                  <Divider key="divider" />,
+                  <MenuItem 
+                    key="logout" 
+                    onClick={() => {
+                      handleUserMenuClose();
+                      handleLogout();
+                    }}
+                  >
+                    <ListItemIcon>
+                      <Logout fontSize="small" />
+                    </ListItemIcon>
+                    <ListItemText>Logout</ListItemText>
+                  </MenuItem>
+                ].filter(Boolean)}
               </Menu>
-            </>
+            </Box>
           ) : (
-            !isMobile && (
-              <Box sx={{ display: 'flex' }}>
-                <Button color="inherit" component={RouterLink} to="/login">
-                  Login
-                </Button>
-                <Button color="inherit" component={RouterLink} to="/register" variant="outlined" sx={{ ml: 1 }}>
-                  Register
-                </Button>
-              </Box>
-            )
+            <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
+              <Button
+                color="inherit"
+                component={RouterLink}
+                to="/login"
+                startIcon={<Login />}
+              >
+                Login
+              </Button>
+              <Button
+                variant="outlined"
+                color="inherit"
+                component={RouterLink}
+                to="/register"
+                startIcon={<PersonAdd />}
+              >
+                Register
+              </Button>
+            </Box>
           )}
         </Box>
       </Toolbar>

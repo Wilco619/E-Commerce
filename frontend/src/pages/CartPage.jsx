@@ -59,26 +59,32 @@ const CartPage = () => {
     }
   };
 
-  const handleUpdateQuantity = async (cartItemId, quantity) => {
+  const handleUpdateQuantity = async (cartItemId, quantity, currentStock) => {
     try {
-      if (quantity <= 0) {
-        await handleRemoveItem(cartItemId);
-        return;
-      }
-      
-      await cartAPI.updateCartItem(cart.id, cartItemId, quantity);
-      fetchCart();
-      showToast('Cart updated successfully', 'success');
+        if (quantity <= 0) {
+            await handleRemoveItem(cartItemId);
+            return;
+        }
+        
+        // Check if requested quantity exceeds available stock
+        if (quantity > currentStock) {
+            showToast(`Only ${currentStock} items available`, 'error');
+            return;
+        }
+        
+        await cartAPI.updateCartItem(cartItemId, quantity);
+        await fetchCart();
+        showToast('Cart updated successfully', 'success');
     } catch (err) {
-      console.error('Error updating cart:', err);
-      showToast('Failed to update cart', 'error');
+        console.error('Error updating cart:', err);
+        showToast(err.response?.data?.error || 'Failed to update cart', 'error');
     }
   };
 
   const handleRemoveItem = async (cartItemId) => {
     try {
-      await cartAPI.removeFromCart(cart.id, cartItemId);
-      fetchCart();
+      await cartAPI.removeFromCart(cartItemId);
+      await fetchCart(); // Refresh cart after removal
       showToast('Item removed from cart', 'success');
     } catch (err) {
       console.error('Error removing item:', err);
@@ -88,8 +94,8 @@ const CartPage = () => {
 
   const handleClearCart = async () => {
     try {
-      await cartAPI.clearCart(cart.id);
-      fetchCart();
+      await cartAPI.clearCart();
+      await fetchCart(); // Refresh cart after clearing
       showToast('Cart cleared successfully', 'success');
     } catch (err) {
       console.error('Error clearing cart:', err);
@@ -168,7 +174,8 @@ const CartPage = () => {
                       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <IconButton 
                           size="small" 
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity - 1)}
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.product.stock)}
+                          disabled={item.quantity <= 1}
                         >
                           <RemoveIcon />
                         </IconButton>
@@ -178,15 +185,20 @@ const CartPage = () => {
                           onChange={(e) => {
                             const value = parseInt(e.target.value);
                             if (!isNaN(value)) {
-                              handleUpdateQuantity(item.id, value);
+                              handleUpdateQuantity(item.id, value, item.product.stock);
                             }
                           }}
-                          inputProps={{ min: 1, style: { textAlign: 'center' } }}
+                          inputProps={{ 
+                              min: 1, 
+                              max: item.product.stock,
+                              style: { textAlign: 'center' } 
+                          }}
                           sx={{ width: 60, mx: 1 }}
                         />
                         <IconButton 
                           size="small"
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1)}
+                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.product.stock)}
+                          disabled={item.quantity >= item.product.stock}
                         >
                           <AddIcon />
                         </IconButton>

@@ -26,7 +26,8 @@ import { useAuth } from '../authentication/AuthContext';
 const CategoryPage = () => {
   const { slug } = useParams();
   const { enqueueSnackbar } = useSnackbar();
-  const [category, setCategory] = useState(null);
+  const [categoryDetails, setCategoryDetails] = useState(null);
+  const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
@@ -35,11 +36,17 @@ const CategoryPage = () => {
   const { isAuthenticated } = useAuth();
 
   useEffect(() => {
-    const fetchCategory = async () => {
+    const fetchCategoryData = async () => {
       try {
         setLoading(true);
-        const response = await productsAPI.getCategoryProducts(slug);
-        setCategory(response.data);
+        const [categoryResponse, productsResponse] = await Promise.all([
+          productsAPI.getCategory(slug),
+          productsAPI.getCategoryProducts(slug)
+        ]);
+
+        setCategoryDetails(categoryResponse.data);
+        // Handle paginated response
+        setProducts(productsResponse.data.results || productsResponse.data);
       } catch (err) {
         setError('Failed to load category. Please try again later.');
         console.error('Error fetching category:', err);
@@ -48,7 +55,7 @@ const CategoryPage = () => {
       }
     };
 
-    fetchCategory();
+    fetchCategoryData();
   }, [slug]);
 
   const handleAddToCart = async (product) => {
@@ -74,7 +81,7 @@ const CategoryPage = () => {
     );
   }
 
-  if (error || !category) {
+  if (error || !categoryDetails) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
         <Box sx={{ textAlign: 'center', py: 5 }}>
@@ -103,26 +110,26 @@ const CategoryPage = () => {
         <Link component={RouterLink} to="/shop" color="inherit">
           Shop
         </Link>
-        <Typography color="text.primary">{category.name}</Typography>
+        <Typography color="text.primary">{categoryDetails?.name}</Typography>
       </Breadcrumbs>
 
       {/* Category Header */}
       <Box sx={{ mb: 4 }}>
         <Typography variant="h4" component="h1" gutterBottom>
-          {category.name}
+          {categoryDetails?.name}
         </Typography>
-        {category.description && (
+        {categoryDetails?.description && (
           <Typography variant="body1" color="text.secondary">
-            {category.description}
+            {categoryDetails.description}
           </Typography>
         )}
         <Divider sx={{ my: 2 }} />
       </Box>
 
       {/* Product Grid */}
-      {category.products && category.products.length > 0 ? (
+      {products.length > 0 ? (
         <Grid container spacing={3}>
-          {category.products.map((product) => (
+          {products.map((product) => (
             <Grid item key={product.id} xs={12} sm={6} md={4}>
               <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
                 {product.feature_image ? (
@@ -161,19 +168,19 @@ const CategoryPage = () => {
                           color="primary" 
                           sx={{ fontWeight: 'bold', mr: 1 }}
                         >
-                          ${product.discount_price}
+                          Ksh{product.discount_price}
                         </Typography>
                         <Typography 
                           variant="body2" 
                           color="text.secondary" 
                           sx={{ textDecoration: 'line-through' }}
                         >
-                          ${product.price}
+                          Ksh{product.price}
                         </Typography>
                       </>
                     ) : (
                       <Typography variant="h6" color="primary" sx={{ fontWeight: 'bold' }}>
-                        ${product.price}
+                        Ksh{product.price}
                       </Typography>
                     )}
                   </Box>

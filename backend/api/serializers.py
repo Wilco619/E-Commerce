@@ -11,7 +11,7 @@ import logging
 
 from .models import (
     CustomUser, Category, Product, ProductImage, 
-    Cart, CartItem, Order, OrderItem
+    Cart, CartItem, Order, OrderItem, GuestCart, GuestCartItem
 )
 
 
@@ -197,21 +197,59 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class ProductImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductImage
-        fields = ('id', 'image', 'is_feature')
+        fields = ('id', 'image')
 
 class ProductListSerializer(serializers.ModelSerializer):
     category_name = serializers.CharField(source='category.name', read_only=True)
     feature_image = serializers.SerializerMethodField()
-    
+    images = ProductImageSerializer(many=True, read_only=True)
+    is_feature = serializers.BooleanField(required=False, default=False)
+    is_available = serializers.BooleanField(required=False, default=True)
+    weekly_orders = serializers.IntegerField(read_only=True)
+    is_in_stock = serializers.BooleanField(read_only=True)
+    stock = serializers.IntegerField(read_only=True)
+
     class Meta:
         model = Product
-        fields = '__all__'
-    
+        fields = [
+            'id', 'name', 'slug', 'description', 'price', 
+            'discount_price', 'stock', 'is_in_stock', 
+            'feature_image', 'category_name', 'is_available','is_feature','weekly_orders','images'
+        ]
+
     def get_feature_image(self, obj):
-        feature_image = obj.images.filter(is_feature=True).first()
-        if feature_image:
-            return self.context['request'].build_absolute_uri(feature_image.image.url)
+        first_image = obj.images.first()
+        if (first_image):
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(first_image.image.url)
+            return first_image.image.url
         return None
+
+    def to_internal_value(self, data):
+        # Convert string boolean values to actual booleans
+        if 'is_feature' in data:
+            data = data.copy()
+            data['is_feature'] = str(data['is_feature']).lower() in ('true', '1', 't')
+        if 'is_available' in data:
+            data = data.copy()
+            data['is_available'] = str(data['is_available']).lower() in ('true', '1', 't')
+        return super().to_internal_value(data)
+
+    def update(self, instance, validated_data):
+        # Ensure is_feature is properly handled
+        is_feature = validated_data.get('is_feature', instance.is_feature)
+        validated_data['is_feature'] = bool(is_feature)
+        
+        instance = super().update(instance, validated_data)
+
+        # Handle image uploads if any
+        if self.context['request'].FILES:
+            images_data = self.context['request'].FILES.getlist('images')
+            for image in images_data:
+                ProductImage.objects.create(product=instance, image=image)
+
+        return instance
 
 class ProductDetailSerializer(serializers.ModelSerializer):
     category = serializers.ReadOnlyField(source='category.name')
@@ -222,25 +260,32 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class CategorySerializer(serializers.ModelSerializer):
-    products_count = serializers.IntegerField(source='products.count', read_only=True)
-    
-    class Meta:
-        model = Category
-        fields = '__all__'
+    product_count = serializers.IntegerField(read_only=True)
+    slug = serializers.SlugField(read_only=True)
 
-class CategoryDetailSerializer(serializers.ModelSerializer):
-    products = ProductListSerializer(many=True, read_only=True)
-    
     class Meta:
         model = Category
-        fields = ('id', 'name', 'slug', 'description', 'is_active', 'products')
+        fields = ['id', 'name', 'slug', 'description', 'image', 'product_count']
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        print(f"Debug - Serializing category: {representation}")
+        return representation
+
+class CategoryDetailSerializer(CategorySerializer):
+    products = ProductListSerializer(many=True, read_only=True, source='products.all')
+
+    class Meta(CategorySerializer.Meta):
+        fields = CategorySerializer.Meta.fields + ['products']
 
 class CartItemSerializer(serializers.ModelSerializer):
     product = ProductListSerializer(read_only=True)
     product_id = serializers.PrimaryKeyRelatedField(
         queryset=Product.objects.all(), source='product', write_only=True
     )
-    total_price = serializers.ReadOnlyField()
+    total_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
     
     class Meta:
         model = CartItem
@@ -248,12 +293,24 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
-    total_price = serializers.ReadOnlyField()
-    total_items = serializers.ReadOnlyField()
+    total_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, read_only=True
+    )
+    total_items = serializers.IntegerField(read_only=True)
     
     class Meta:
         model = Cart
         fields = ('id', 'items', 'total_price', 'total_items', 'created_at', 'updated_at')
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Calculate totals
+        total_price = sum(item.total_price for item in instance.items.all())
+        total_items = sum(item.quantity for item in instance.items.all())
+        
+        data['total_price'] = float(total_price)
+        data['total_items'] = total_items
+        return data
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
@@ -271,7 +328,8 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = ('id', 'full_name', 'email', 'phone_number', 'address', 'city', 
                   'postal_code', 'country', 'order_notes', 'order_total', 
                   'order_status', 'payment_status', 'payment_method', 
-                  'tracking_number', 'created_at', 'updated_at', 'items')
+                  'tracking_number', 'created_at', 'updated_at', 'items',
+                  'delivery_location', 'location_type', 'delivery_fee', 'special_instructions')
         read_only_fields = ('order_total', 'order_status', 'payment_status', 'tracking_number')
 
 class CheckoutSerializer(serializers.ModelSerializer):
@@ -318,3 +376,15 @@ class CheckoutSerializer(serializers.ModelSerializer):
         cart.items.all().delete()
         
         return order
+
+class GuestCartItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GuestCartItem
+        fields = ['id', 'product', 'quantity']
+
+class GuestCartSerializer(serializers.ModelSerializer):
+    items = GuestCartItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = GuestCart
+        fields = ['id', 'session_id', 'items']

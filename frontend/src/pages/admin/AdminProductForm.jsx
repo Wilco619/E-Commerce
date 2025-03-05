@@ -37,7 +37,8 @@ const AdminProductForm = () => {
     price: '',
     discount_price: '',
     stock: '',
-    is_available: true
+    is_available: true,
+    is_feature: false  // New field for featured products
   });
 
   const [categories, setCategories] = useState([]);
@@ -166,15 +167,15 @@ const AdminProductForm = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (!validateForm()) {
       return;
     }
-    
+
     try {
       setLoading(true);
       setServerError(null);
-      
+
       // Prepare form data for API
       const productData = {
         name: formData.name,
@@ -183,25 +184,37 @@ const AdminProductForm = () => {
         price: parseFloat(formData.price),
         discount_price: formData.discount_price ? parseFloat(formData.discount_price) : null,
         stock: parseInt(formData.stock),
-        is_available: formData.is_available,
-        slug: generateSlug(formData.name) // Generate slug from product name
+        is_available: Boolean(formData.is_available),
+        is_feature: Boolean(formData.is_feature), // Explicitly convert to boolean
+        slug: generateSlug(formData.name)
       };
+
+      // Create FormData object
+      const formDataObj = new FormData();
       
+      // Append product data with proper boolean conversion
+      Object.keys(productData).forEach(key => {
+        if (typeof productData[key] === 'boolean') {
+          formDataObj.append(key, productData[key].toString()); // Convert boolean to string
+        } else if (productData[key] !== null && productData[key] !== undefined) {
+          formDataObj.append(key, productData[key]);
+        }
+      });
+
+      // Append images to FormData
+      selectedFiles.forEach(file => {
+        formDataObj.append('images', file);
+      });
+
       let response;
       if (isEditMode) {
-        response = await adminAPI.updateProduct(slug, productData);
+        response = await adminAPI.updateProduct(slug, formDataObj);
       } else {
-        response = await adminAPI.createProduct(productData);
+        response = await adminAPI.createProduct(formDataObj);
       }
-      
-      // Handle image uploads if needed
-      if (selectedFiles.length > 0) {
-        // Implement image upload logic here
-        // This would typically involve creating a FormData object and making API calls
-      }
-      
+
       setSuccessMessage(`Product ${isEditMode ? 'updated' : 'created'} successfully!`);
-      
+
       // Redirect after a short delay
       setTimeout(() => {
         navigate('/admin/products');
@@ -209,6 +222,7 @@ const AdminProductForm = () => {
     } catch (err) {
       console.error("Error submitting product form:", err);
       setServerError(err.response?.data?.error || "Failed to save product. Please try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -369,6 +383,20 @@ const AdminProductForm = () => {
               </Grid>
 
               <Grid item xs={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={formData.is_feature}
+                      onChange={handleInputChange}
+                      name="is_feature"
+                      color="primary"
+                    />
+                  }
+                  label="Feature this Product"
+                />
+              </Grid>
+
+              <Grid item xs={12}>
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="h6" gutterBottom>
                   Product Images
@@ -404,18 +432,6 @@ const AdminProductForm = () => {
                             >
                               <DeleteIcon />
                             </IconButton>
-                            {image.is_feature && (
-                              <Chip 
-                                label="Featured" 
-                                color="primary" 
-                                size="small"
-                                sx={{ 
-                                  position: 'absolute',
-                                  bottom: 5,
-                                  left: 5
-                                }}
-                              />
-                            )}
                           </Box>
                         </Grid>
                       ))}

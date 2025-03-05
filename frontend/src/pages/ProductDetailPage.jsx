@@ -58,13 +58,6 @@ const ProductDetailPage = () => {
     fetchProduct();
   }, [slug]);
 
-  const handleQuantityChange = (event) => {
-    const value = parseInt(event.target.value);
-    if (value > 0 && value <= (product?.stock || 1)) {
-      setQuantity(value);
-    }
-  };
-
   const handleAddToCart = async () => {
     if (!cart) {
       enqueueSnackbar('Cart not found. Please try again.', { variant: 'error' });
@@ -208,10 +201,10 @@ const ProductDetailPage = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             {product.discount_price ? (
               <>
-                <Typography variant="h4" color="error" sx={{ mr: 2 }}>
+                <Typography variant="h4" color="primary" sx={{ mr: 2 , fontSize: "1.7rem" }}>
                   Ksh{product.discount_price}
                 </Typography>
-                <Typography variant="h6" color="text.secondary" sx={{ textDecoration: 'line-through' }}>
+                <Typography variant="h6" color="error" sx={{ textDecoration: 'line-through' }}>
                   Ksh{product.price}
                 </Typography>
                 <Typography variant="body1" color="error" sx={{ ml: 2 }}>
@@ -247,20 +240,6 @@ const ProductDetailPage = () => {
           {/* Quantity and Add to Cart */}
           {product.is_available && product.stock > 0 ? (
             <>
-              <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
-                <Typography variant="body1" sx={{ mr: 2 }}>
-                  Quantity:
-                </Typography>
-                <TextField
-                  type="number"
-                  variant="outlined"
-                  size="small"
-                  value={quantity}
-                  onChange={handleQuantityChange}
-                  inputProps={{ min: 1, max: product.stock }}
-                  sx={{ width: 80 }}
-                />
-              </Box>
 
               <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
                 <Button
@@ -282,7 +261,18 @@ const ProductDetailPage = () => {
                 >
                   {addingToCart ? 'Processing...' : 'Buy Now'}
                 </Button>
+
               </Box>
+
+                <Button 
+                variant="contained" 
+                color="primary"
+                size='large'
+                onClick={() => navigate('/')}
+                sx={{ mt: 2}}
+              >
+                Continue Shopping
+              </Button>
             </>
           ) : (
             <Alert severity="warning" sx={{ mb: 3 }}>

@@ -32,7 +32,7 @@ const Footer = () => {
               to="/"
               sx={{ textDecoration: 'none', color: 'inherit', fontWeight: 700, mb: 2, display: 'block' }}
             >
-              SHOP<Box component="span" sx={{ color: 'primary.light' }}>HUB</Box>
+              JEMSA<Box component="span" sx={{ color: 'primary.light' }}>TECHS</Box>
             </Typography>
             <Typography variant="body2" sx={{ mb: 2 }}>
               Your one-stop shop for quality products at competitive prices.
@@ -85,19 +85,19 @@ const Footer = () => {
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <LocationOn sx={{ mr: 1 }} fontSize="small" />
                 <Typography variant="body2">
-                  123 Shopping St., E-commerce City, EC 12345
+                  Street....., Nairobi City, Kenya
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Phone sx={{ mr: 1 }} fontSize="small" />
                 <Typography variant="body2">
-                  +1 (555) 123-4567
+                  +254 (712) 834-651
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <Email sx={{ mr: 1 }} fontSize="small" />
                 <Typography variant="body2">
-                  support@shophub.com
+                  info@jemsa.co.ke
                 </Typography>
               </Box>
             </Stack>
@@ -142,7 +142,7 @@ const Footer = () => {
         
         <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center' }}>
           <Typography variant="body2" sx={{ mb: isMobile ? 2 : 0 }}>
-            © {new Date().getFullYear()} SHOPHUB. All rights reserved.
+            © {new Date().getFullYear()} JEMSATECHS. All rights reserved.
           </Typography>
           <Stack direction="row" spacing={3}>
             <Link component={RouterLink} to="/terms" color="inherit" underline="hover" variant="body2">

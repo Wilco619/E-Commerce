@@ -1,6 +1,7 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoutes'
+import { useAuth } from './authentication/AuthContext';
 
 // Public Pages
 import HomePage from './pages/HomePage';
@@ -28,6 +29,18 @@ import AdminOrders from './pages/admin/AdminOrders';
 import AdminOrderDetail from './pages/admin/AdminOrderDetails';
 import OTPVerification from './pages/OTPVerification';
 import PasswordChange from './pages/PasswordChange';
+
+const PrivateRoute = ({ children }) => {
+  const { isAuthenticated } = useAuth();
+  const location = useLocation();
+
+  if (!isAuthenticated) {
+    sessionStorage.setItem('checkoutAttempted', 'true');
+    return <Navigate to="/register" state={{ from: location }} />;
+  }
+
+  return children;
+};
 
 const AppRoutes = () => {
   return (

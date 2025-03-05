@@ -18,7 +18,7 @@ const ShopPage = () => {
   const auth = useAuth();
   const isAuthenticated = auth.isAuthenticated && typeof auth.isAuthenticated === 'function' ? auth.isAuthenticated() : false;
 
-  const { cart = null, addToCart, refreshCart } = useCart();
+  const { addToCart, cart, refreshCart } = useCart();
   const { enqueueSnackbar } = useSnackbar();
   
   // State
@@ -152,22 +152,30 @@ const ShopPage = () => {
 
   const handleAddToCart = async (product) => {
     try {
-      setAddingToCart((prev) => ({ ...prev, [product.id]: true }));
-      await addToCart(product.id, 1);
-      enqueueSnackbar('Product added to cart', { variant: 'success' });
-      refreshCart(); // Refresh the cart to update the cart icon count
-      setProducts((prevProducts) =>
-        prevProducts.map((p) =>
-          p.id === product.id ? { ...p, stock: p.stock - 1 } : p
-        )
-      );
+        if (!product.is_in_stock) {
+            enqueueSnackbar('Product is out of stock', { variant: 'error' });
+            return;
+        }
+        
+        setAddingToCart((prev) => ({ ...prev, [product.id]: true }));
+        await addToCart(product.id, 1);
+        enqueueSnackbar('Product added to cart', { variant: 'success' });
+        
+        // Update local product stock
+        setProducts((prevProducts) =>
+            prevProducts.map((p) =>
+                p.id === product.id ? { ...p, stock: p.stock - 1 } : p
+            )
+        );
     } catch (error) {
-      console.error('Error adding to cart:', error);
-      enqueueSnackbar('Failed to add product to cart', { variant: 'error' });
+        console.error('Error adding to cart:', error);
+        enqueueSnackbar(error.response?.data?.error || 'Failed to add product to cart', { 
+            variant: 'error' 
+        });
     } finally {
-      setAddingToCart((prev) => ({ ...prev, [product.id]: false }));
+        setAddingToCart((prev) => ({ ...prev, [product.id]: false }));
     }
-  };
+};
 
   const toggleFavorite = (productId) => {
     let newFavorites;
@@ -205,51 +213,53 @@ const ShopPage = () => {
 
         <Paper elevation={1} sx={{ p: 2, mb: 4 }}>
           <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} md={6}>
-              <form onSubmit={handleSearch}>
-                <TextField
-                  fullWidth
-                  variant="outlined"
-                  placeholder="Search products..."
-                  value={searchTerm}
-                  onChange={handleSearchInputChange}
-                  InputProps={{
-                    startAdornment: (
-                      <InputAdornment position="start">
-                        <SearchIcon />
-                      </InputAdornment>
-                    ),
-                    endAdornment: searchTerm && (
-                      <InputAdornment position="end">
-                        <IconButton onClick={() => setSearchTerm('')} edge="end">
-                          <CloseIcon />
-                        </IconButton>
-                      </InputAdornment>
-                    ),
-                  }}
-                />
-              </form>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <FormControl fullWidth variant="outlined">
-                <InputLabel id="sort-select-label">Sort By</InputLabel>
-                <Select
-                  labelId="sort-select-label"
-                  value={sortBy}
-                  onChange={handleSortChange}
-                  label="Sort By"
-                >
-                  <MenuItem value="created_at">Newest</MenuItem>
-                  <MenuItem value="price_asc">Price: Low to High</MenuItem>
-                  <MenuItem value="price_desc">Price: High to Low</MenuItem>
-                </Select>
-              </FormControl>
-            </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <form onSubmit={handleSearch}>
+              <TextField
+                size="small"
+                fullWidth
+                variant="outlined"
+                placeholder="Search products..."
+                value={searchTerm}
+                onChange={handleSearchInputChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon fontSize="small" />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton onClick={() => setSearchTerm('')} edge="end" size="small">
+                        <CloseIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+            </form>
+          </Grid>
+          <Grid item xs={12} sm={6} md={4}>
+            <FormControl fullWidth variant="outlined" size="small">
+              <InputLabel id="sort-select-label">Sort By</InputLabel>
+              <Select
+                labelId="sort-select-label"
+                value={sortBy}
+                onChange={handleSortChange}
+                label="Sort By"
+              >
+                <MenuItem value="created_at">Newest</MenuItem>
+                <MenuItem value="price_asc">Price: Low to High</MenuItem>
+                <MenuItem value="price_desc">Price: High to Low</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+
           </Grid>
         </Paper>
 
         {(selectedCategory || inStockOnly || searchTerm) && (
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 3 }} sm={2} md={1}> 
             <Typography variant="body2" sx={{ mr: 1 }}>
               Active Filters:
             </Typography>
@@ -542,11 +552,20 @@ const ShopPage = () => {
                       variant="outlined"
                       size="small"
                       startIcon={<AddShoppingCartIcon fontSize="small" />}
-                      disabled={!product.is_available || addingToCart[product.id]}
+                      disabled={!product.is_in_stock || addingToCart[product.id]}
                       onClick={() => handleAddToCart(product)}
-                      sx={{ fontSize: '0.7rem', py: 0.5 }}
+                      sx={{ 
+                          fontSize: '0.7rem', 
+                          py: 0.5,
+                          color: product.is_in_stock ? 'primary' : 'error.main',
+                          borderColor: product.is_in_stock ? 'primary.main' : 'error.main',
+                      }}
                     >
-                      {addingToCart[product.id] ? 'Adding...' : product.is_available ? 'Add to Cart' : 'Out of Stock'}
+                      {addingToCart[product.id] 
+                          ? 'Adding...' 
+                          : product.is_in_stock 
+                              ? 'Add to Cart' 
+                              : 'Out of Stock'}
                     </Button>
                   </CardActions>
                 </Card>
