@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { Box } from '@mui/material';
+import { Box, Container } from '@mui/material';
 import { productsAPI } from '../services/api';
 
 // Import components
@@ -15,7 +15,7 @@ import CategorySection from '../components/CategorySection';  // Update import
 
 const HomePage = () => {
   const theme = useTheme();
-  const isSmallScreen = useMediaQuery(theme.breakpoints.down('sm'));
+  const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
   
   // State management
   const [featuredProducts, setFeaturedProducts] = useState([]);
@@ -80,44 +80,49 @@ const HomePage = () => {
   if (error) return <Error message={error} />;
 
   return (
-    <Box 
-      sx={{ 
-        maxWidth: 'xl', 
-        mx: 'auto', 
-        px: { xs: 2, sm: 3, md: 4 },
-        '& > *': {
-          mb: { xs: 4, md: 6 }
-        },
-        '& > *:last-child': {
-          mb: 0
-        }
-      }}
-    >
-      <HeroSection isSmallScreen={isSmallScreen} />
-      
-      <FeaturedProducts 
-        featuredProducts={featuredProducts}
-        isSmallScreen={isSmallScreen}
-        prevRef={prevFeaturedRef}
-        nextRef={nextFeaturedRef}
-        setSelectedImage={setSelectedImage}
-      />
-      
-      {categoriesLoading ? (
-        <Loader />
-      ) : categoriesError ? (
-        <Error message={categoriesError} />
-      ) : (
-        <CategorySection 
-          categories={categories} 
+    <Container maxWidth="xl">
+      <Box 
+        sx={{ 
+          maxWidth: 'xl', 
+          mx: 'auto', 
+          px: { xs: 2, sm: 3, md: 4 },
+          '& > *': {
+            mb: { xs: 4, md: 6 }
+          },
+          '& > *:last-child': {
+            mb: 0
+          }
+        }}
+      >
+        <HeroSection isSmallScreen={isSmallScreen} />
+        
+        <FeaturedProducts 
+          featuredProducts={featuredProducts}
           isSmallScreen={isSmallScreen}
+          prevRef={prevFeaturedRef}
+          nextRef={nextFeaturedRef}
+          setSelectedImage={setSelectedImage}
         />
-      )}
-      
-      <PopularProducts popularProducts={popularProducts} />
-      
-      <Newsletter />
-    </Box>
+        
+        {categoriesLoading ? (
+          <Loader />
+        ) : categoriesError ? (
+          <Error message={categoriesError} />
+        ) : (
+          <CategorySection 
+            categories={categories} 
+            isSmallScreen={isSmallScreen}
+          />
+        )}
+        
+        <PopularProducts 
+          popularProducts={popularProducts} 
+          isSmallScreen={isSmallScreen} 
+        />
+        
+        <Newsletter />
+      </Box>
+    </Container>
   );
 };
 

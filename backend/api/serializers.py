@@ -6,12 +6,14 @@ from django.core.exceptions import ValidationError
 from datetime import timedelta
 from django.utils import timezone
 from django.conf import settings
+from django.utils.text import slugify
 
 import logging
 
 from .models import (
     CustomUser, Category, Product, ProductImage, 
-    Cart, CartItem, Order, OrderItem, GuestCart, GuestCartItem
+    Cart, CartItem, Order, OrderItem, GuestCart, GuestCartItem,
+    NewsletterSubscriber
 )
 
 
@@ -251,26 +253,100 @@ class ProductListSerializer(serializers.ModelSerializer):
 
         return instance
 
-class ProductDetailSerializer(serializers.ModelSerializer):
-    category = serializers.ReadOnlyField(source='category.name')
-    images = ProductImageSerializer(many=True, read_only=True)
-    
-    class Meta:
-        model = Product
-        fields = '__all__'
+    def create(self, validated_data):
+        # Generate slug from name
+        name = validated_data.get('name')
+        slug = slugify(name)
+        
+        # Ensure unique slug
+        if Product.objects.filter(slug=slug).exists():
+            slug = f"{slug}-{timezone.now().timestamp()}"
+        
+        validated_data['slug'] = slug
+        return super().create(validated_data)
+
 
 class CategorySerializer(serializers.ModelSerializer):
     product_count = serializers.IntegerField(read_only=True)
     slug = serializers.SlugField(read_only=True)
+    is_active = serializers.BooleanField(required=False, default=True)
 
     class Meta:
         model = Category
-        fields = ['id', 'name', 'slug', 'description', 'image', 'product_count']
+        fields = ['id', 'name', 'slug', 'description', 'image', 'product_count', 'is_active']
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        print(f"Debug - Serializing category: {representation}")
-        return representation
+    def create(self, validated_data):
+        # Generate slug from name
+        name = validated_data.get('name')
+        base_slug = slugify(name)
+        
+        # Ensure unique slug
+        slug = base_slug
+        counter = 1
+        while Category.objects.filter(slug=slug).exists():
+            slug = f"{base_slug}-{counter}"
+            counter += 1
+        
+        validated_data['slug'] = slug
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Update slug if name changes
+        if 'name' in validated_data and validated_data['name'] != instance.name:
+            new_base_slug = slugify(validated_data['name'])
+            new_slug = new_base_slug
+            counter = 1
+            
+            while Category.objects.filter(slug=new_slug).exclude(id=instance.id).exists():
+                new_slug = f"{new_base_slug}-{counter}"
+                counter += 1
+            
+            validated_data['slug'] = new_slug
+        
+        return super().update(instance, validated_data)
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    images = ProductImageSerializer(many=True, read_only=True)
+    category = CategorySerializer(read_only=True)
+    category_id = serializers.PrimaryKeyRelatedField(
+        queryset=Category.objects.all(),
+        source='category',
+        write_only=True
+    )
+    
+    class Meta:
+        model = Product
+        fields = [
+            'id', 'name', 'slug', 'description', 'price', 
+            'discount_price', 'stock', 'is_available', 
+            'is_feature', 'category', 'category_id', 'images'
+        ]
+        read_only_fields = ['slug']
+
+    def create(self, validated_data):
+        # Generate slug from name
+        name = validated_data.get('name')
+        slug = slugify(name)
+        
+        # Ensure unique slug
+        if Product.objects.filter(slug=slug).exists():
+            slug = f"{slug}-{timezone.now().timestamp()}"
+        
+        validated_data['slug'] = slug
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Update slug if name changes
+        if 'name' in validated_data and validated_data['name'] != instance.name:
+            new_slug = slugify(validated_data['name'])
+            if Product.objects.filter(slug=new_slug).exclude(id=instance.id).exists():
+                new_slug = f"{new_slug}-{timezone.now().timestamp()}"
+            validated_data['slug'] = new_slug
+        
+        # Remove images from validated_data if present
+        validated_data.pop('images', None)
+        return super().update(instance, validated_data)
+
 
 class CategoryDetailSerializer(CategorySerializer):
     products = ProductListSerializer(many=True, read_only=True, source='products.all')
@@ -293,14 +369,17 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
-    total_price = serializers.DecimalField(
-        max_digits=10, decimal_places=2, read_only=True
+    total = serializers.DecimalField(
+        max_digits=10, 
+        decimal_places=2, 
+        read_only=True
     )
-    total_items = serializers.IntegerField(read_only=True)
-    
+
     class Meta:
         model = Cart
-        fields = ('id', 'items', 'total_price', 'total_items', 'created_at', 'updated_at')
+        fields = ['id', 'user', 'session_id', 'items', 'total', 
+                 'created_at', 'updated_at']
+        read_only_fields = ['user', 'session_id', 'total']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -388,3 +467,8 @@ class GuestCartSerializer(serializers.ModelSerializer):
     class Meta:
         model = GuestCart
         fields = ['id', 'session_id', 'items']
+
+class NewsletterSubscriberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = NewsletterSubscriber
+        fields = ['email']

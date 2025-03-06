@@ -28,11 +28,11 @@ const AdminCategories = () => {
     setLoading(true);
     try {
       const response = await adminAPI.getCategories();
-      setCategories(response.data.results); // Extract categories from results
-      setTotalCategories(response.data.count); // Set total number of categories
+      setCategories(response.data.results || response.data);
+      setTotalCategories(response.data.count || response.data.length);
     } catch (error) {
       console.error('Error fetching categories:', error);
-      showAlert('Failed to load categories', 'error');
+      showAlert('Failed to fetch categories', 'error');
     } finally {
       setLoading(false);
     }
@@ -75,38 +75,38 @@ const AdminCategories = () => {
   };
 
   return (
-    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1" gutterBottom>
-          Categories Management
-        </Typography>
-        <Button 
-          variant="contained" 
-          color="primary" 
-          startIcon={<Add />}
-          component={Link}
-          to="/admin/categories/new"
-        >
-          Add New Category
-        </Button>
-      </Box>
-
-      {loading ? (
-        <Box display="flex" justifyContent="center" my={4}>
-          <CircularProgress />
+    <Container maxWidth="lg">
+      <Box sx={{ my: 4 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
+          <Typography variant="h4" component="h1">
+            Categories
+          </Typography>
+          <Button
+            component={Link}
+            to="/admin/categories/new"
+            variant="contained"
+            color="primary"
+            startIcon={<Add />}
+          >
+            Add Category
+          </Button>
         </Box>
-      ) : (
-        <Paper elevation={3}>
-          <TableContainer>
+
+        {loading ? (
+          <Box display="flex" justifyContent="center" my={4}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <TableContainer component={Paper}>
             <Table>
               <TableHead>
                 <TableRow>
                   <TableCell>ID</TableCell>
                   <TableCell>Name</TableCell>
-                  <TableCell>Slug</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Products</TableCell>
-                  <TableCell>Actions</TableCell>
+                  <TableCell>Description</TableCell>
+                  <TableCell align="center">Products</TableCell>
+                  <TableCell align="center">Status</TableCell>
+                  <TableCell align="right">Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -114,18 +114,25 @@ const AdminCategories = () => {
                   .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                   .map((category) => (
                     <TableRow key={category.id}>
-                      <TableCell>{category.id}</TableCell>
+                      <TableCell>#{category.id}</TableCell>
                       <TableCell>{category.name}</TableCell>
-                      <TableCell>{category.slug}</TableCell>
-                      <TableCell>
-                        <Chip 
-                          label={category.is_active ? "Active" : "Inactive"}
-                          color={category.is_active ? "success" : "error"}
+                      <TableCell>{category.description}</TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={`${category.product_count || 0} products`}
+                          color="primary"
+                          variant="outlined"
                           size="small"
                         />
                       </TableCell>
-                      <TableCell>{category.products_count}</TableCell>
-                      <TableCell>
+                      <TableCell align="center">
+                        <Chip
+                          label={category.is_active ? 'Active' : 'Inactive'}
+                          color={category.is_active ? 'success' : 'default'}
+                          size="small"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
                         <IconButton 
                           component={Link}
                           to={`/admin/categories/edit/${category.slug}`}
@@ -146,18 +153,17 @@ const AdminCategories = () => {
                   ))}
               </TableBody>
             </Table>
+            <TablePagination
+              component="div"
+              count={totalCategories}
+              page={page}
+              onPageChange={handlePageChange}
+              rowsPerPage={rowsPerPage}
+              onRowsPerPageChange={handleRowsPerPageChange}
+            />
           </TableContainer>
-          <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
-            component="div"
-            count={totalCategories} // Use totalCategories state
-            rowsPerPage={rowsPerPage}
-            page={page}
-            onPageChange={handlePageChange}
-            onRowsPerPageChange={handleRowsPerPageChange}
-          />
-        </Paper>
-      )}
+        )}
+      </Box>
 
       {/* Delete Confirmation Dialog */}
       <Dialog

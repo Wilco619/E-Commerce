@@ -14,23 +14,51 @@ export const useCart = () => {
 };
 
 export const CartProvider = ({ children }) => {
-  // Initialize state first
+  const { user } = useAuth();
   const [cart, setCart] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null); // Add error state
+  const [sessionId] = useState(() => {
+    return sessionStorage.getItem('guestSessionId') || 
+           `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  });
 
-  // Get context values after initialization
-  const auth = useAuth();
-  const { sessionId } = useSession();
-  const isAuthenticated = auth?.isAuthenticated || false;
+  useEffect(() => {
+    const initializeCart = async () => {
+      try {
+        setLoading(true);
+        setError(null); // Reset error state
+        if (user) {
+          // Fetch user cart
+          const response = await productsAPI.getUserCart();
+          setCart(response.data);
+        } else {
+          // Store session ID if not exists
+          if (!sessionStorage.getItem('guestSessionId')) {
+            sessionStorage.setItem('guestSessionId', sessionId);
+          }
+          // Fetch guest cart
+          const response = await productsAPI.getGuestCart(sessionId);
+          setCart(response.data);
+        }
+      } catch (error) {
+        console.error('Error initializing cart:', error);
+        setError(error.message || 'Failed to initialize cart');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeCart();
+  }, [user, sessionId]);
 
   const fetchCart = async () => {
-    if (!isAuthenticated && !sessionId) return;
+    if (!user && !sessionId) return;
 
     try {
       setLoading(true);
       setError(null);
-      const response = isAuthenticated
+      const response = user
         ? await productsAPI.getUserCart()
         : await productsAPI.getGuestCart(sessionId);
       setCart(response.data);
@@ -44,13 +72,13 @@ export const CartProvider = ({ children }) => {
 
   useEffect(() => {
     fetchCart();
-  }, [isAuthenticated, sessionId]);
+  }, [user, sessionId]);
 
   useEffect(() => {
     const migrateCartIfNeeded = async () => {
       try {
         // Only attempt migration if we have a session ID and user just logged in
-        if (isAuthenticated && sessionId) {
+        if (user && sessionId) {
           const guestCart = await productsAPI.getGuestCart(sessionId);
           
           // Only migrate if guest cart exists and has items
@@ -69,29 +97,29 @@ export const CartProvider = ({ children }) => {
     };
 
     migrateCartIfNeeded();
-  }, [isAuthenticated, sessionId]);
+  }, [user, sessionId]);
 
   const addToCart = async (productId, quantity = 1) => {
     try {
-      setLoading(true);
-      const response = isAuthenticated
-        ? await productsAPI.addToUserCart(productId, quantity)
-        : await productsAPI.addToGuestCart(sessionId, productId, quantity);
-      
-      setCart(response.data);
-      return true;
+      if (user) {
+        // For authenticated users
+        const response = await productsAPI.addToUserCart(productId, quantity);
+        setCart(response.data);
+      } else {
+        // For guest users
+        const response = await productsAPI.addToGuestCart(sessionId, productId, quantity);
+        setCart(response.data);
+      }
     } catch (error) {
       console.error('Error adding to cart:', error);
-      return false;
-    } finally {
-      setLoading(false);
+      throw error;
     }
   };
 
   const removeFromCart = async (itemId) => {
     try {
       setLoading(true);
-      if (isAuthenticated) {
+      if (user) {
         await productsAPI.removeFromUserCart(itemId);
       } else {
         await productsAPI.removeFromGuestCart(sessionId, itemId);
@@ -109,7 +137,7 @@ export const CartProvider = ({ children }) => {
   const updateCartItem = async (itemId, quantity) => {
     try {
       setLoading(true);
-      if (isAuthenticated) {
+      if (user) {
         await productsAPI.updateUserCartItem(itemId, quantity);
       } else {
         await productsAPI.updateGuestCartItem(sessionId, itemId, quantity);
@@ -127,7 +155,7 @@ export const CartProvider = ({ children }) => {
   const clearCart = async () => {
     try {
       setLoading(true);
-      if (isAuthenticated) {
+      if (user) {
         await productsAPI.clearUserCart();
       } else {
         await productsAPI.clearGuestCart(sessionId);

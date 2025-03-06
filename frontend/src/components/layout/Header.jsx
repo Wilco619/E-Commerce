@@ -118,7 +118,7 @@ const Header = () => {
   const handleLogout = useCallback(() => {
     logout();
     setUserMenuAnchor(null);
-    navigate('/');
+    navigate('/home');
   }, [logout, navigate]);
   
   const toggleMobileMenu = useCallback(() => {

@@ -15,11 +15,75 @@ import {
   Alert,
   InputAdornment,
   IconButton,
-  CircularProgress
+  CircularProgress,
+  Divider,
+  StepConnector,
+  styled
 } from '@mui/material';
-import { PersonAddOutlined, Visibility, VisibilityOff } from '@mui/icons-material';
+import { 
+  PersonAddOutlined, 
+  Visibility, 
+  VisibilityOff, 
+  CheckCircleOutlined,
+  AccountCircleOutlined,
+  ContactMailOutlined 
+} from '@mui/icons-material';
 import { authAPI } from '../services/api';
-import { useAuth } from '../authentication/AuthContext'; // Assuming you have an AuthContext
+import { useAuth } from '../authentication/AuthContext';
+
+// Custom styled StepConnector
+const ColorlibConnector = styled(StepConnector)(({ theme }) => ({
+  [`&.${StepConnector.alternativeLabel}`]: {
+    top: 22,
+  },
+  [`& .${StepConnector.line}`]: {
+    height: 3,
+    border: 0,
+    backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[800] : '#eaeaf0',
+    borderRadius: 1,
+  },
+  [`&.Mui-active .${StepConnector.line}`]: {
+    backgroundImage: `linear-gradient(to right, ${theme.palette.primary.main}, ${theme.palette.primary.light})`,
+  },
+  [`&.Mui-completed .${StepConnector.line}`]: {
+    backgroundImage: `linear-gradient(to right, ${theme.palette.primary.main}, ${theme.palette.primary.light})`,
+  },
+}));
+
+// Custom styled Step Icon
+const ColorlibStepIconRoot = styled('div')(({ theme, ownerState }) => ({
+  backgroundColor: theme.palette.mode === 'dark' ? theme.palette.grey[700] : '#ccc',
+  zIndex: 1,
+  color: '#fff',
+  width: 45,
+  height: 45,
+  display: 'flex',
+  borderRadius: '50%',
+  justifyContent: 'center',
+  alignItems: 'center',
+  ...(ownerState.active && {
+    backgroundImage: `linear-gradient(136deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+    boxShadow: '0 4px 10px 0 rgba(0,0,0,.25)',
+  }),
+  ...(ownerState.completed && {
+    backgroundImage: `linear-gradient(136deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+  }),
+}));
+
+function ColorlibStepIcon(props) {
+  const { active, completed, className, icon } = props;
+
+  const icons = {
+    1: <AccountCircleOutlined />,
+    2: <ContactMailOutlined />,
+  };
+
+  return (
+    <ColorlibStepIconRoot ownerState={{ completed, active }} className={className}>
+      {completed ? <CheckCircleOutlined /> : icons[icon]}
+    </ColorlibStepIconRoot>
+  );
+}
 
 const RegisterPage = () => {
   const navigate = useNavigate();
@@ -150,232 +214,372 @@ const RegisterPage = () => {
   };
 
   return (
-    <Container component="main" maxWidth="sm" sx={{ mb: 4 }}>
+    <Container component="main" maxWidth="sm" sx={{ my: 8 }}>
       <Paper 
-        elevation={3} 
+        elevation={6} 
         sx={{ 
-          mt: 8, 
-          p: 4, 
-          display: 'flex', 
-          flexDirection: 'column', 
-          alignItems: 'center' 
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'column' },
+          overflow: 'hidden',
+          borderRadius: 2,
+          minHeight: '700px',
         }}
       >
-        <Box 
+        {/* Top/Header Section - Image and Progress Indicator */}
+        <Box
           sx={{
-            my: 2,
+            bgcolor: 'primary.dark',
+            position: 'relative',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            backgroundImage: 'url("https://source.unsplash.com/random?signup")',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            p: 3,
+            height: '200px',
           }}
         >
-          <Box sx={{ 
-            backgroundColor: 'primary.main', 
-            borderRadius: '50%', 
-            p: 1, 
-            mb: 2 
-          }}>
-            <PersonAddOutlined sx={{ color: 'white' }} />
+          {/* Dark overlay for better text visibility */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.6)',
+              zIndex: 1,
+            }}
+          />
+          
+          {/* Content overlay */}
+          <Box 
+            sx={{ 
+              position: 'relative', 
+              zIndex: 2, 
+              textAlign: 'center',
+              width: '100%',
+            }}
+          >
+            <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+              Join Our Community
+            </Typography>
+            <Typography variant="body1">
+              Create an account to get access to exclusive deals
+            </Typography>
           </Box>
-          <Typography component="h1" variant="h5">
-            Create an Account
-          </Typography>
         </Box>
-        
-        <Stepper activeStep={activeStep} sx={{ width: '100%', mb: 4 }}>
-          {steps.map((label) => (
-            <Step key={label}>
-              <StepLabel>{label}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-        
-        {error && (
-          <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-            {error}
-          </Alert>
-        )}
-        
-        <Box component="form" sx={{ width: '100%' }}>
-          {activeStep === 0 ? (
-            // Account Information Step
-            <>
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="username"
-                    label="Username"
-                    name="username"
-                    autoComplete="username"
-                    value={formData.username}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="email"
-                    label="Email Address"
-                    name="email"
-                    autoComplete="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    required
-                    fullWidth
-                    name="password"
-                    label="Password"
-                    type={showPassword ? 'text' : 'password'}
-                    id="password"
-                    autoComplete="new-password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    InputProps={{
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            aria-label="toggle password visibility"
-                            onClick={() => setShowPassword(!showPassword)}
-                            edge="end"
+
+        {/* Registration Form Section */}
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            p: { xs: 3, sm: 4 },
+            overflow: 'auto'
+          }}
+        >
+          <Box
+            sx={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%'
+            }}
+          >
+            <Box sx={{ 
+              backgroundColor: 'primary.main', 
+              borderRadius: '50%', 
+              p: 1, 
+              mb: 2 
+            }}>
+              <PersonAddOutlined sx={{ color: 'white' }} />
+            </Box>
+            
+            <Typography component="h2" variant="h5" fontWeight="bold">
+              Create an Account
+            </Typography>
+            
+            {/* Stepper */}
+            <Box sx={{ width: '100%', my: 3 }}>
+              <Stepper activeStep={activeStep} alternativeLabel connector={<ColorlibConnector />}>
+                {steps.map((label, index) => (
+                  <Step key={label}>
+                    <StepLabel StepIconComponent={ColorlibStepIcon}>{label}</StepLabel>
+                  </Step>
+                ))}
+              </Stepper>
+            </Box>
+            
+            {error && (
+              <Alert severity="error" sx={{ width: '100%', my: 2 }}>
+                {error}
+              </Alert>
+            )}
+            
+            <Box component="form" sx={{ width: '100%', mt: 2 }}>
+              {activeStep === 0 ? (
+                // Account Information Step
+                <>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12}>
+                      <TextField
+                        required
+                        fullWidth
+                        id="username"
+                        label="Username"
+                        name="username"
+                        autoComplete="username"
+                        value={formData.username}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        required
+                        fullWidth
+                        id="email"
+                        label="Email Address"
+                        name="email"
+                        autoComplete="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        required
+                        fullWidth
+                        name="password"
+                        label="Password"
+                        type={showPassword ? 'text' : 'password'}
+                        id="password"
+                        autoComplete="new-password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                        InputProps={{
+                          endAdornment: (
+                            <InputAdornment position="end">
+                              <IconButton
+                                aria-label="toggle password visibility"
+                                onClick={() => setShowPassword(!showPassword)}
+                                edge="end"
+                              >
+                                {showPassword ? <VisibilityOff /> : <Visibility />}
+                              </IconButton>
+                            </InputAdornment>
+                          ),
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        required
+                        fullWidth
+                        name="password_confirm"
+                        label="Confirm Password"
+                        type={showPassword ? 'text' : 'password'}
+                        id="password_confirm"
+                        value={formData.password_confirm}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                        error={formData.password !== formData.password_confirm && formData.password_confirm !== ''}
+                        helperText={formData.password !== formData.password_confirm && formData.password_confirm !== '' ? 'Passwords do not match' : ''}
+                      />
+                    </Grid>
+                  </Grid>
+                  
+                  {formData.password && (
+                    <Box sx={{ mt: 3, mb: 2, bgcolor: 'background.paper', borderRadius: 1, p: 2 }}>
+                      <Typography variant="subtitle2" gutterBottom fontWeight="bold">
+                        Password Requirements:
+                      </Typography>
+                      <Grid container spacing={1}>
+                        <Grid item xs={12} sm={6}>
+                          <Alert 
+                            severity={passwordErrors.length ? "success" : "warning"} 
+                            icon={passwordErrors.length ? <CheckCircleOutlined /> : undefined}
+                            sx={{ 
+                              py: 0, 
+                              '& .MuiAlert-message': { py: 1 },
+                              '& .MuiAlert-icon': { my: 1 }
+                            }}
                           >
-                            {showPassword ? <VisibilityOff /> : <Visibility />}
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    required
+                            At least 8 characters
+                          </Alert>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Alert 
+                            severity={passwordErrors.hasNumber ? "success" : "warning"} 
+                            icon={passwordErrors.hasNumber ? <CheckCircleOutlined /> : undefined}
+                            sx={{ 
+                              py: 0, 
+                              '& .MuiAlert-message': { py: 1 },
+                              '& .MuiAlert-icon': { my: 1 }
+                            }}
+                          >
+                            At least one number
+                          </Alert>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Alert 
+                            severity={passwordErrors.hasUpper ? "success" : "warning"} 
+                            icon={passwordErrors.hasUpper ? <CheckCircleOutlined /> : undefined}
+                            sx={{ 
+                              py: 0, 
+                              '& .MuiAlert-message': { py: 1 },
+                              '& .MuiAlert-icon': { my: 1 }
+                            }}
+                          >
+                            At least one uppercase letter
+                          </Alert>
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Alert 
+                            severity={passwordErrors.hasLower ? "success" : "warning"} 
+                            icon={passwordErrors.hasLower ? <CheckCircleOutlined /> : undefined}
+                            sx={{ 
+                              py: 0, 
+                              '& .MuiAlert-message': { py: 1 },
+                              '& .MuiAlert-icon': { my: 1 }
+                            }}
+                          >
+                            At least one lowercase letter
+                          </Alert>
+                        </Grid>
+                      </Grid>
+                    </Box>
+                  )}
+                  
+                  <Button
                     fullWidth
-                    name="password_confirm"
-                    label="Confirm Password"
-                    type={showPassword ? 'text' : 'password'}
-                    id="password_confirm"
-                    value={formData.password_confirm}
-                    onChange={handleChange}
-                    error={formData.password !== formData.password_confirm && formData.password_confirm !== ''}
-                    helperText={formData.password !== formData.password_confirm && formData.password_confirm !== '' ? 'Passwords do not match' : ''}
-                  />
-                </Grid>
-              </Grid>
-              
-              {formData.password && (
-                <Box sx={{ mt: 2 }}>
-                  <Typography variant="body2" gutterBottom>
-                    Password Requirements:
-                  </Typography>
-                  <Alert severity={passwordErrors.length ? "success" : "warning"} sx={{ mb: 1 }}>
-                    At least 8 characters
-                  </Alert>
-                  <Alert severity={passwordErrors.hasNumber ? "success" : "warning"} sx={{ mb: 1 }}>
-                    At least one number
-                  </Alert>
-                  <Alert severity={passwordErrors.hasUpper ? "success" : "warning"} sx={{ mb: 1 }}>
-                    At least one uppercase letter
-                  </Alert>
-                  <Alert severity={passwordErrors.hasLower ? "success" : "warning"} sx={{ mb: 1 }}>
-                    At least one lowercase letter
-                  </Alert>
-                </Box>
+                    variant="contained"
+                    onClick={handleNext}
+                    sx={{ 
+                      mt: 3, 
+                      mb: 2,
+                      py: 1.5,
+                      borderRadius: 2,
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    Continue to Personal Details
+                  </Button>
+                </>
+              ) : (
+                // Personal Details Step
+                <>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        required
+                        fullWidth
+                        id="first_name"
+                        label="First Name"
+                        name="first_name"
+                        autoComplete="given-name"
+                        value={formData.first_name}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        required
+                        fullWidth
+                        id="last_name"
+                        label="Last Name"
+                        name="last_name"
+                        autoComplete="family-name"
+                        value={formData.last_name}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        id="phone_number"
+                        label="Phone Number"
+                        name="phone_number"
+                        autoComplete="tel"
+                        value={formData.phone_number}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        id="address"
+                        label="Address"
+                        name="address"
+                        autoComplete="street-address"
+                        multiline
+                        rows={3}
+                        value={formData.address}
+                        onChange={handleChange}
+                        variant="outlined"
+                        size="medium"
+                      />
+                    </Grid>
+                  </Grid>
+                  
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3, mb: 2 }}>
+                    <Button
+                      variant="outlined"
+                      onClick={handleBack}
+                      sx={{ py: 1.5, px: 4, borderRadius: 2 }}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      variant="contained"
+                      onClick={handleSubmit}
+                      disabled={loading}
+                      sx={{ py: 1.5, px: 4, borderRadius: 2, fontWeight: 'bold' }}
+                    >
+                      {loading ? <CircularProgress size={24} /> : 'Create Account'}
+                    </Button>
+                  </Box>
+                </>
               )}
               
-              <Button
-                fullWidth
-                variant="contained"
-                onClick={handleNext}
-                sx={{ mt: 3, mb: 2 }}
-              >
-                Next
-              </Button>
-            </>
-          ) : (
-            // Personal Details Step
-            <>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="first_name"
-                    label="First Name"
-                    name="first_name"
-                    autoComplete="given-name"
-                    value={formData.first_name}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    required
-                    fullWidth
-                    id="last_name"
-                    label="Last Name"
-                    name="last_name"
-                    autoComplete="family-name"
-                    value={formData.last_name}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    id="phone_number"
-                    label="Phone Number"
-                    name="phone_number"
-                    autoComplete="tel"
-                    value={formData.phone_number}
-                    onChange={handleChange}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    id="address"
-                    label="Address"
-                    name="address"
-                    autoComplete="street-address"
-                    multiline
-                    rows={3}
-                    value={formData.address}
-                    onChange={handleChange}
-                  />
-                </Grid>
-              </Grid>
+              <Divider sx={{ my: 3 }}>
+                <Typography variant="body2" color="text.secondary">
+                  OR
+                </Typography>
+              </Divider>
               
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3, mb: 2 }}>
-                <Button
+              <Box sx={{ textAlign: 'center' }}>
+                <Typography variant="body2" sx={{ mb: 1 }}>
+                  Already have an account?
+                </Typography>
+                <Button 
+                  component={RouterLink} 
+                  to="/login" 
                   variant="outlined"
-                  onClick={handleBack}
+                  fullWidth
+                  sx={{ py: 1.5, borderRadius: 2 }}
                 >
-                  Back
-                </Button>
-                <Button
-                  variant="contained"
-                  onClick={handleSubmit}
-                  disabled={loading}
-                >
-                  {loading ? <CircularProgress size={24} /> : 'Register'}
+                  Sign In
                 </Button>
               </Box>
-            </>
-          )}
-          
-          <Box sx={{ mt: 2, textAlign: 'center' }}>
-            <Typography variant="body2">
-              Already have an account?{' '}
-              <Link component={RouterLink} to="/login" variant="body2">
-                Sign in
-              </Link>
-            </Typography>
+            </Box>
           </Box>
         </Box>
       </Paper>

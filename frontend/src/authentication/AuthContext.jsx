@@ -118,81 +118,39 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const login = async (credentials) => {
+  const login = async (email, password) => {
     try {
-      const { data } = await authAPI.login(credentials);
-      
-      // Check if we need OTP verification
-      if (data.message && data.message.includes('OTP generated')) {
-        setVerificationState({
-          needsOTP: true,
-          userId: data.user_id
-        });
-        return { needsOTP: true, userId: data.user_id };
+      const response = await authAPI.post('/login/', {
+        email,
+        password
+      });
+
+      if (!response.data) {
+        throw new Error('No response data received');
       }
-      
-      // If we have tokens
-      if (data.access && data.refresh) {
-        localStorage.setItem(ACCESS_TOKEN, data.access);
-        localStorage.setItem(REFRESH_TOKEN, data.refresh);
-        
-        // Use synchronized state update with consistent order
-        if (data.user) {
-          updateAuthState({
-            user: data.user,
-            isAuthenticated: true,
-            isAdmin: data.user.user_type === 'ADMIN'
-          });
-        } else {
-          // Only set authenticated state and fetch full user data
-          updateAuthState({ isAuthenticated: true });
-          await fetchCurrentUser();
-        }
-        
-        return { needsOTP: false };
-      }
-      
-      return data;
+
+      // Return the response data which should contain user_id and message
+      return response.data;
     } catch (error) {
-      console.error('Login failed:', error);
+      console.error('Login API error:', error);
       throw error;
     }
   };
 
-  const verifyOTP = async (otpData) => {
+  const verifyOTP = async (userId, otp) => {
     try {
-      const { data } = await authAPI.verifyOTP(otpData);
-      
-      // OTP verification successful, store tokens
-      localStorage.setItem(ACCESS_TOKEN, data.access);
-      localStorage.setItem(REFRESH_TOKEN, data.refresh);
-      
-      // Reset verification state
-      setVerificationState({
-        needsOTP: false,
-        userId: null
+      const response = await authAPI.post('/verify-otp/', {
+        user_id: userId,
+        otp: otp
       });
-      
-      // Use synchronized update to ensure consistent state
-      updateAuthState({
-        user: { id: data.user_id, user_type: data.user_type },
-        isAuthenticated: true,
-        isAdmin: data.user_type === 'ADMIN'
-      });
-      
-      // Fetch complete user data
-      await fetchCurrentUser();
-      
-      // Redirect based on user type
-      if (data.user_type === 'ADMIN') {
-        navigate('/admin/categories/new');
-      } else {
-        navigate('/');
+
+      if (!response.data || !response.data.tokens) {
+        throw new Error('Invalid OTP response');
       }
-      
-      return data;
+
+      return response.data;
     } catch (error) {
-      console.error('OTP verification failed:', error);
+      console.error('OTP verification error:', error);
       throw error;
     }
   };

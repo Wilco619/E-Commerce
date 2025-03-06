@@ -9,13 +9,17 @@ from django_filters.rest_framework import DjangoFilterBackend
 import logging
 import random
 
+from django.db.models import Count, Q
+from django.utils import timezone
+from datetime import timedelta
+
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 from django.db.models import Sum
-from .models import GuestCart, GuestCartItem, Order, Product
+from .models import GuestCart, GuestCartItem, Order, OrderItem, Product
 from .serializers import OrderSerializer
 
 from django.conf import settings
@@ -58,7 +62,7 @@ from .serializers import (
     OTPSerializer, PasswordChangeSerializer, UserLoginSerializer, UserRegistrationSerializer, UserProfileSerializer,
     CategorySerializer, CategoryDetailSerializer,
     ProductListSerializer, ProductDetailSerializer,
-    CartSerializer,OrderSerializer, CheckoutSerializer, GuestCartSerializer
+    CartSerializer,OrderSerializer, CheckoutSerializer, GuestCartSerializer, NewsletterSubscriberSerializer
 )
 from .permissions import IsAdminOrReadOnly, IsOwnerOrAdmin
 
@@ -95,18 +99,15 @@ class UserRegistrationView(GenericAPIView):
         serializer = self.get_serializer(data=request.data)
         
         try:
-            # This will raise ValidationError if username already exists
             serializer.is_valid(raise_exception=True)
-            
-            # Get the validated data from the serializer
             validated_data = serializer.validated_data
             
-            # Create user with validated data
+            # Create user without OTP
             user = CustomUser.objects.create_user(
                 username=validated_data['username'],
                 email=validated_data['email'],
                 password=validated_data['password'],
-                user_type='CUSTOMER'  # Set user_type to CUSTOMER
+                user_type='CUSTOMER'
             )
             
             # Update additional fields if present
@@ -119,57 +120,15 @@ class UserRegistrationView(GenericAPIView):
             if 'address' in validated_data:
                 user.address = validated_data['address']
             
-            # Generate OTP for email verification
-            otp = str(random.randint(100000, 999999))
-            user.otp = otp
-            user.otp_generated_at = timezone.now()
             user.save()
-            
-            # Store user_id and OTP in session
-            request.session['user_id'] = user.id
-            request.session['otp'] = otp
             
             # Migrate guest cart if exists
             self.migrate_guest_cart(request, user)
             
-            # Send verification email
-            if settings.SEND_OTP_VIA_EMAIL:
-                send_mail(
-                    'Your OTP Code',
-                    f'Your OTP code is {otp}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False,
-                )
-            else:
-                print(f'{user.email} Your OTP code is {otp}')
-                
             return Response({
-                'message': 'Registration successful. Please verify your email.',
+                'message': 'Registration successful. Please login to continue.',
                 'user_id': user.id
             }, status=status.HTTP_201_CREATED)
-            
-        except serializers.ValidationError as e:
-            # Handle validation errors
-            return Response({
-                'error': 'Registration failed',
-                'details': e.detail
-            }, status=status.HTTP_400_BAD_REQUEST)
-            
-        except IntegrityError as e:
-            # Handle database integrity errors (like duplicate username)
-            error_message = str(e)
-            if 'username' in error_message:
-                message = "A user with this username already exists."
-            elif 'email' in error_message:
-                message = "A user with this email already exists."
-            else:
-                message = "Registration failed due to a database error."
-                
-            return Response({
-                'error': 'Registration failed',
-                'details': {'message': message}
-            }, status=status.HTTP_400_BAD_REQUEST)
             
         except Exception as e:
             # Handle other exceptions
@@ -184,95 +143,43 @@ class LoginView(GenericAPIView):
     serializer_class = UserLoginSerializer
     
     def post(self, request, *args, **kwargs):
-        # Log the incoming request
-        logger.info("=== LOGIN REQUEST RECEIVED ===")
-        logger.info(f"Request Method: {request.method}")
-        logger.info(f"Request Content-Type: {request.content_type}")
-        logger.info(f"Request Headers: {dict(request.headers)}")
-        
-        # Safely log request data
         try:
-            request_data = request.data
-            safe_data = {k: '***' if k == 'password' else v for k, v in request_data.items()}
-            logger.info(f"Request Data: {safe_data}")
-        except Exception as e:
-            logger.error(f"Error parsing request data: {str(e)}")
-        
-        try:
-            # Create serializer with request data
-            logger.info("Creating serializer with request data")
             serializer = self.get_serializer(data=request.data)
             
-            # Validate serializer
-            logger.info("Validating serializer")
-            is_valid = serializer.is_valid(raise_exception=False)
-            
-            if not is_valid:
-                logger.error(f"Serializer validation errors: {serializer.errors}")
+            if not serializer.is_valid():
                 return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
             
-            # Get user from validated data
-            logger.info("Getting user from validated data")
-            try:
-                user = serializer.validated_data
-                logger.info(f"User retrieved: {user.username} (ID: {user.id})")
-            except Exception as e:
-                logger.error(f"Error accessing validated_data: {str(e)}")
-                logger.info(f"Validated data type: {type(serializer.validated_data)}")
-                logger.info(f"Validated data content: {serializer.validated_data}")
-                return Response(
-                    {"detail": "Server error while processing login"}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            user = serializer.validated_data
             
-            # Generate OTP and save it
-            logger.info("Generating OTP")
+            # Generate OTP
             otp = str(random.randint(100000, 999999))
             user.otp = otp
             user.otp_generated_at = timezone.now()
             user.save()
-            logger.info(f"OTP generated for user {user.username}")
             
             # Store in session
             request.session['user_id'] = user.id
             request.session['otp'] = otp
-            logger.info("User ID and OTP stored in session")
             
-            # Print OTP and email to terminal
-            print(f"\n==== OTP INFORMATION ====")
-            print(f"User Email: {user.email}")
-            print(f"Generated OTP: {otp}")
-            print(f"=========================\n")
-            
-            # Send the OTP
+            # Send the OTP via email
             if settings.SEND_OTP_VIA_EMAIL:
-                logger.info(f"Sending OTP to email: {user.email}")
-                send_mail(
-                    'Your OTP Code',
-                    f'Your OTP code is {otp}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False,
-                )
-                logger.info("OTP email sent")
-            else:
-                logger.info(f"OTP delivery disabled. User: {user.email}, OTP: {otp}")
+                send_success = send_otp_email(user.email, otp)
+                if not send_success:
+                    return Response(
+                        {"error": "Failed to send OTP email. Please try again."},
+                        status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                    )
             
-            # Prepare response
-            response_data = {
-                'message': 'OTP generated. Check your email.',
+            return Response({
+                'message': 'OTP has been sent to your email.',
                 'user_id': user.id,
-            }
-            logger.info("Login successful, returning OTP verification response")
-            return Response(response_data, status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
             
         except Exception as e:
-            logger.exception(f"Unexpected error in login view: {str(e)}")
             return Response(
-                {"detail": "An unexpected error occurred"}, 
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-    
 
 class VerifyOTPView(GenericAPIView):
     permission_classes = (AllowAny,)
@@ -380,26 +287,19 @@ class UserProfileView(APIView):
     
 
 class CategoryViewSet(viewsets.ModelViewSet):
-    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     lookup_field = 'slug'
     permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        queryset = queryset.annotate(
+        return Category.objects.annotate(
             product_count=Count('products', filter=Q(products__is_available=True))
         )
-        categories_list = list(queryset)  # Force evaluation
-        print("Debug - Categories found:", len(categories_list))
-        for cat in categories_list:
-            print(f"Category: {cat.name}, Products: {cat.product_count}")
-        return queryset
 
-    def list(self, request, *args, **kwargs):
-        response = super().list(request, *args, **kwargs)
-        print("Debug - Response data:", response.data)
-        return response
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 class ProductFilter(django_filters.FilterSet):
     price_min = django_filters.NumberFilter(field_name="price", lookup_expr='gte')
@@ -411,9 +311,7 @@ class ProductFilter(django_filters.FilterSet):
         model = Product
         fields = ['category', 'is_available', 'price_min', 'price_max', 'inStock']
 
-from django.db.models import Count, Q
-from django.utils import timezone
-from datetime import timedelta
+
 
 class ProductViewSet(viewsets.ModelViewSet):
     queryset = Product.objects.all().prefetch_related('images')
@@ -423,13 +321,44 @@ class ProductViewSet(viewsets.ModelViewSet):
     search_fields = ['name', 'description']
     ordering_fields = ['created_at', 'price', 'name']
     lookup_field = 'slug'
+    parser_classes = (MultiPartParser, FormParser)
 
+    def get_serializer_class(self):
+        if self.action in ['create', 'update', 'partial_update']:
+            return ProductDetailSerializer
+        return ProductListSerializer
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        # Handle the product data
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        # Handle image uploads
+        images = request.FILES.getlist('images')
+        if images:
+            for image in images:
+                ProductImage.objects.create(
+                    product=instance,
+                    image=image
+                )
+
+        return Response(serializer.data)
+    
     def get_queryset(self):
-        queryset = super().get_queryset()
-        category_slug = self.request.query_params.get('category', None)
-        if (category_slug):
+        queryset = Product.objects.all()
+        category_slug = self.request.query_params.get('category_slug', None)
+        
+        if category_slug:
             queryset = queryset.filter(category__slug=category_slug)
+        
         return queryset
+
+    def perform_update(self, serializer):
+        serializer.save()
     
     @action(detail=False, methods=['get'])
     def featured(self, request):
@@ -465,83 +394,119 @@ class ProductViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def popular(self, request):
-        one_week_ago = timezone.now() - timedelta(days=7)
-        
-        popular_products = Product.objects.annotate(
-            weekly_orders=Count(
-                'orderitem',
-                filter=Q(
-                    orderitem__order__created_at__gte=one_week_ago,
-                    orderitem__order__order_status='DELIVERED'  # Changed to match Order model
-                )
-            )
-        ).filter(
-            weekly_orders__gt=0
-        ).order_by('-weekly_orders')[:6]
+        try:
+            # Get product IDs from OrderItem with count >= 5
+            popular_product_ids = OrderItem.objects.values('product') \
+                .annotate(order_count=Count('id')) \
+                .filter(order_count__gte=5) \
+                .values_list('product', flat=True)
 
-        serializer = self.get_serializer(popular_products, many=True)
-        return Response(serializer.data)
+            # Get the actual products
+            popular_products = Product.objects.filter(
+                id__in=popular_product_ids,
+                is_available=True
+            ).annotate(
+                order_count=Count('orderitem')
+            ).order_by('-order_count')
+
+            # Log for debugging
+            logger.debug(f"Found {popular_products.count()} popular products")
+            for product in popular_products:
+                logger.debug(f"Product {product.name}: {product.order_count} orders")
+
+            serializer = self.get_serializer(popular_products, many=True)
+            return Response({
+                'results': serializer.data,
+                'count': popular_products.count()
+            })
+        except Exception as e:
+            logger.error(f"Error fetching popular products: {str(e)}")
+            return Response(
+                {'error': 'Failed to fetch popular products'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class CartViewSet(viewsets.ModelViewSet):
-    permission_classes = [permissions.AllowAny]
+    serializer_class = CartSerializer
 
-    def get_serializer_class(self):
-        if self.action in ['guest_cart', 'add_guest_item']:
-            return GuestCartSerializer
-        return CartSerializer
+    def get_permissions(self):
+        """
+        Allow guest cart operations without authentication
+        """
+        if self.action in ['guest_cart', 'create_guest_cart', 'add_guest_item']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
     def get_queryset(self):
         if self.request.user.is_authenticated:
             return Cart.objects.filter(user=self.request.user)
         return Cart.objects.none()
 
+    def create(self, request):
+        # Create a new cart for authenticated user
+        if request.user.is_authenticated:
+            # Check if user already has a cart
+            existing_cart = Cart.objects.filter(user=request.user).first()
+            if (existing_cart):
+                serializer = self.get_serializer(existing_cart)
+                return Response(serializer.data)
+            
+            # Create new cart if none exists
+            cart = Cart.objects.create(user=request.user)
+            serializer = self.get_serializer(cart)
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        
+        return Response(
+            {"error": "Authentication required"},
+            status=status.HTTP_401_UNAUTHORIZED
+        )
+
     @action(detail=True, methods=['post'])
     def add_item(self, request, pk=None):
-        cart = self.get_object()
-        product_id = request.data.get('product_id')
-        quantity = int(request.data.get('quantity', 1))
-        
         try:
-            product = Product.objects.get(id=product_id)
-            
-            # Check if product is in stock
-            if not product.is_in_stock:
+            cart = self.get_object()
+            product_id = request.data.get('product_id')
+            quantity = int(request.data.get('quantity', 1))
+
+            # Validate product
+            try:
+                product = Product.objects.get(id=product_id)
+            except Product.DoesNotExist:
                 return Response(
-                    {'error': 'Product is out of stock'}, 
+                    {'error': 'Product not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # Check stock
+            if not product.is_available or product.stock < quantity:
+                return Response(
+                    {'error': 'Product is out of stock or unavailable'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
-            
-            # Check if there's sufficient stock
-            if not product.has_sufficient_stock(quantity):
-                return Response(
-                    {'error': f'Only {product.stock} items available'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
+
+            # Add or update cart item
             cart_item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 product=product,
                 defaults={'quantity': quantity}
             )
-            
+
             if not created:
-                new_quantity = cart_item.quantity + quantity
-                if not product.has_sufficient_stock(new_quantity):
-                    return Response(
-                        {'error': f'Cannot add more items. Only {product.stock} available'}, 
-                        status=status.HTTP_400_BAD_REQUEST
-                    )
-                cart_item.quantity = new_quantity
+                cart_item.quantity += quantity
                 cart_item.save()
-            
-            cart.refresh_from_db()
+
             serializer = self.get_serializer(cart)
             return Response(serializer.data)
-            
-        except Product.DoesNotExist:
+
+        except Cart.DoesNotExist:
             return Response(
-                {'error': 'Product not found'}, 
+                {'error': 'Cart not found'},
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=True, methods=['post'])
@@ -732,10 +697,36 @@ class CartViewSet(viewsets.ModelViewSet):
             serializer = GuestCartSerializer(cart)
             return Response(serializer.data)
         except GuestCart.DoesNotExist:
-            return Response(
-                {"error": "No active cart found"}, 
-                status=status.HTTP_404_NOT_FOUND
+            # Create a new guest cart if one doesn't exist
+            cart = GuestCart.objects.create(
+                user_session_id=user_session_id,
+                session_id=f"guest_{timezone.now().timestamp()}_{user_session_id}"
             )
+            serializer = GuestCartSerializer(cart)
+            return Response(serializer.data)
+
+    @action(detail=False, methods=['get'])
+    def get_guest_cart(self, request):
+        session_id = request.query_params.get('user_session_id')
+        if not session_id:
+            return Response({'error': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        cart = GuestCart.objects.filter(session_id=session_id).first()
+        if not cart:
+            return Response({'error': 'Cart not found'}, status=status.HTTP_404_NOT_FOUND)
+            
+        serializer = GuestCartSerializer(cart)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def create_guest_cart(self, request):
+        session_id = request.data.get('user_session_id')
+        if not session_id:
+            return Response({'error': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        cart = GuestCart.objects.create(session_id=session_id)
+        serializer = GuestCartSerializer(cart)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
@@ -794,13 +785,7 @@ class ResendOTPView(GenericAPIView):
             
             # Send the OTP
             if settings.SEND_OTP_VIA_EMAIL:
-                send_mail(
-                    'Your OTP Code',
-                    f'Your OTP code is {otp}',
-                    settings.DEFAULT_FROM_EMAIL,
-                    [user.email],
-                    fail_silently=False,
-                )
+                send_otp_email(user.email, otp)
             else:
                 print(f'{user.email} Your OTP code is {otp}')
             
@@ -835,3 +820,37 @@ class AdminDashboardViewSet(viewsets.ViewSet):
             'recentOrders': recent_orders_data,
         }
         return Response(data)
+
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from rest_framework import status
+from .serializers import NewsletterSubscriberSerializer
+from .utils import send_newsletter_confirmation, send_otp_email
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def subscribe_newsletter(request):
+    serializer = NewsletterSubscriberSerializer(data=request.data)
+    if serializer.is_valid():
+        try:
+            subscriber = serializer.save()
+            # Send confirmation email
+            email_sent = send_newsletter_confirmation(subscriber.email)
+            
+            if email_sent:
+                return Response(
+                    {'message': 'Successfully subscribed to newsletter! Please check your email for confirmation.'},
+                    status=status.HTTP_201_CREATED
+                )
+            else:
+                return Response(
+                    {'message': 'Subscribed successfully, but confirmation email could not be sent.'},
+                    status=status.HTTP_201_CREATED
+                )
+        except Exception as e:
+            return Response(
+                {'error': 'This email is already subscribed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

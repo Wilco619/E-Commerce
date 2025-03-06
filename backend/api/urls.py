@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import LoginView, VerifyOTPView, ResendOTPView, UserRegistrationView, UserLogOutAPIView, PasswordChangeView, UserProfileView, CategoryViewSet, ProductViewSet, AdminDashboardViewSet, CartViewSet
+from .views import LoginView, VerifyOTPView, ResendOTPView, UserRegistrationView, UserLogOutAPIView, PasswordChangeView, UserProfileView, CategoryViewSet, ProductViewSet, AdminDashboardViewSet, CartViewSet, subscribe_newsletter
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
@@ -30,4 +30,8 @@ urlpatterns = [
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/token/verify/', TokenVerifyView.as_view(), name='token_verify'),
     path('api/token/blacklist/', TokenBlacklistView.as_view(), name='token_blacklist'),
+    path('newsletter/subscribe/', subscribe_newsletter, name='newsletter-subscribe'),
+    path('carts/guest/', CartViewSet.as_view({'post': 'create_guest_cart'}), name='guest-cart-create'),
+    path('carts/guest_cart/', CartViewSet.as_view({'get': 'get_guest_cart'}), name='guest-cart-get'),
+    path('carts/add_guest_item/', CartViewSet.as_view({'post': 'add_guest_item'}), name='guest-cart-add-item'),
 ] + router.urls

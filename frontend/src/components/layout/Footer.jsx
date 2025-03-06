@@ -1,18 +1,59 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link as RouterLink } from 'react-router-dom';
 import { 
   Box, Container, Grid, Typography, Link, Stack, Divider, 
-  IconButton, TextField, Button, useTheme, useMediaQuery 
+  IconButton, TextField, Button, useTheme, useMediaQuery,
+  Snackbar, Alert 
 } from '@mui/material';
 import { 
   Facebook, Twitter, Instagram, LinkedIn, 
   Phone, Email, LocationOn, Send 
 } from '@mui/icons-material';
+import { productsAPI } from '../../services/api';
 
 const Footer = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
+  // Add state for newsletter
+  const [email, setEmail] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
+
+  // Add newsletter submit handler
+  const handleNewsletterSubmit = async (e) => {
+    e.preventDefault();
+    if (!email) return;
+
+    try {
+      setLoading(true);
+      await productsAPI.subscribeNewsletter({ email });
+      setAlert({
+        open: true,
+        message: 'Successfully subscribed! Please check your email for confirmation.',
+        severity: 'success'
+      });
+      setEmail('');
+    } catch (error) {
+      // Handle the duplicate email error specifically
+      if (error.response?.data?.email?.[0]?.includes('already exists')) {
+        setAlert({
+          open: true,
+          message: 'This email is already subscribed to our newsletter.',
+          severity: 'warning' // Using warning instead of error for better UX
+        });
+      } else {
+        setAlert({
+          open: true,
+          message: error.response?.data?.error || 'Failed to subscribe. Please try again.',
+          severity: 'error'
+        });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -85,7 +126,7 @@ const Footer = () => {
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
                 <LocationOn sx={{ mr: 1 }} fontSize="small" />
                 <Typography variant="body2">
-                  Street....., Nairobi City, Kenya
+                  Bazzar Street, Nairobi City, Kenya
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -110,11 +151,19 @@ const Footer = () => {
             <Typography variant="body2" sx={{ mb: 2 }}>
               Subscribe to our newsletter for the latest deals and updates.
             </Typography>
-            <Box component="form" sx={{ display: 'flex' }}>
+            <Box 
+              component="form" 
+              sx={{ display: 'flex' }}
+              onSubmit={handleNewsletterSubmit}
+            >
               <TextField
                 size="small"
                 placeholder="Your email"
                 variant="outlined"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
                 fullWidth
                 sx={{
                   bgcolor: 'rgba(255, 255, 255, 0.1)',
@@ -127,9 +176,11 @@ const Footer = () => {
                 }}
               />
               <Button 
+                type="submit"
                 variant="contained" 
                 color="secondary" 
                 aria-label="subscribe"
+                disabled={loading}
                 sx={{ ml: 1 }}
               >
                 <Send fontSize="small" />
@@ -157,6 +208,22 @@ const Footer = () => {
           </Stack>
         </Box>
       </Container>
+
+      {/* Add Snackbar for notifications */}
+      <Snackbar
+        open={alert.open}
+        autoHideDuration={6000}
+        onClose={() => setAlert({ ...alert, open: false })}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert 
+          onClose={() => setAlert({ ...alert, open: false })} 
+          severity={alert.severity}
+          sx={{ width: '100%' }}
+        >
+          {alert.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };

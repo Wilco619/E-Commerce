@@ -54,23 +54,35 @@ const AdminProductForm = () => {
       try {
         setLoading(true);
         
-        // Fetch categories
+        // Fetch categories first
         const categoriesResponse = await productsAPI.getCategories();
-        setCategories(categoriesResponse.data.results || categoriesResponse.data); // Handle paginated and non-paginated responses
+        const categoriesData = categoriesResponse.data.results || categoriesResponse.data;
+        setCategories(categoriesData);
         
         // If edit mode, fetch product data
         if (isEditMode) {
           const productResponse = await productsAPI.getProduct(slug);
           const product = productResponse.data;
           
+          // Find the category ID from the product data
+          let categoryId;
+          if (typeof product.category === 'object' && product.category !== null) {
+            categoryId = product.category.id;
+          } else if (typeof product.category === 'number') {
+            categoryId = product.category;
+          } else if (product.category_id) {
+            categoryId = product.category_id;
+          }
+
           setFormData({
             name: product.name,
-            category: product.category,
-            description: product.description,
-            price: product.price,
+            category: categoryId, // Set the category ID
+            description: product.description || '',
+            price: product.price || '',
             discount_price: product.discount_price || '',
-            stock: product.stock,
-            is_available: product.is_available
+            stock: product.stock || '',
+            is_available: Boolean(product.is_available),
+            is_feature: Boolean(product.is_feature)
           });
           
           setImages(product.images || []);
@@ -176,35 +188,27 @@ const AdminProductForm = () => {
       setLoading(true);
       setServerError(null);
 
-      // Prepare form data for API
-      const productData = {
-        name: formData.name,
-        category: formData.category,
-        description: formData.description,
-        price: parseFloat(formData.price),
-        discount_price: formData.discount_price ? parseFloat(formData.discount_price) : null,
-        stock: parseInt(formData.stock),
-        is_available: Boolean(formData.is_available),
-        is_feature: Boolean(formData.is_feature), // Explicitly convert to boolean
-        slug: generateSlug(formData.name)
-      };
-
       // Create FormData object
       const formDataObj = new FormData();
       
-      // Append product data with proper boolean conversion
-      Object.keys(productData).forEach(key => {
-        if (typeof productData[key] === 'boolean') {
-          formDataObj.append(key, productData[key].toString()); // Convert boolean to string
-        } else if (productData[key] !== null && productData[key] !== undefined) {
-          formDataObj.append(key, productData[key]);
+      // Append all form fields
+      Object.keys(formData).forEach(key => {
+        if (key === 'category') {
+          // Send category as category_id
+          formDataObj.append('category_id', formData[key]);
+        } else if (typeof formData[key] === 'boolean') {
+          formDataObj.append(key, formData[key].toString());
+        } else if (formData[key] !== null && formData[key] !== undefined) {
+          formDataObj.append(key, formData[key]);
         }
       });
 
-      // Append images to FormData
-      selectedFiles.forEach(file => {
-        formDataObj.append('images', file);
-      });
+      // Append each new image file
+      if (selectedFiles.length > 0) {
+        selectedFiles.forEach(file => {
+          formDataObj.append('images', file);
+        });
+      }
 
       let response;
       if (isEditMode) {
@@ -214,7 +218,7 @@ const AdminProductForm = () => {
       }
 
       setSuccessMessage(`Product ${isEditMode ? 'updated' : 'created'} successfully!`);
-
+      
       // Redirect after a short delay
       setTimeout(() => {
         navigate('/admin/products');
@@ -289,13 +293,15 @@ const AdminProductForm = () => {
                     select
                     label="Category"
                     name="category"
-                    value={formData.category}
+                    value={formData.category || ''} // Ensure empty string if no category
                     onChange={handleInputChange}
                     error={Boolean(formErrors.category)}
                     helperText={formErrors.category}
                     required
                   >
-                    <MenuItem value="">Select a category</MenuItem>
+                    <MenuItem value="">
+                      <em>Select a category</em>
+                    </MenuItem>
                     {Array.isArray(categories) && categories.map((category) => (
                       <MenuItem key={category.id} value={category.id}>
                         {category.name}

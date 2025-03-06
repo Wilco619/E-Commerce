@@ -109,7 +109,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [os.path.join(BASE_DIR, 'templates')],  # Add this line
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -198,7 +198,7 @@ EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'lymm owce yjah bkit')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # OTP settings
-SEND_OTP_VIA_EMAIL = os.getenv('SEND_OTP_VIA_EMAIL', False)  # Set this to True to send OTPs via email
+SEND_OTP_VIA_EMAIL = os.getenv('SEND_OTP_VIA_EMAIL', True)  # Set this to True to send OTPs via email
 
 AUTH_USER_MODEL = 'api.CustomUser'
 

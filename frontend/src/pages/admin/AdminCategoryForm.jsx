@@ -32,16 +32,20 @@ const AdminCategoryForm = () => {
   const fetchCategoryData = async () => {
     setLoading(true);
     try {
-      const response = await productsAPI.getCategory(slug);
-      const { name, description, is_active } = response.data;
-      setFormData({ name, description: description || '', is_active });
+        const response = await productsAPI.getCategory(slug);
+        const { name, description, is_active } = response.data;
+        setFormData({
+            name,
+            description: description || '',
+            is_active: Boolean(is_active)
+        });
     } catch (error) {
-      console.error('Error fetching category:', error);
-      showAlert('Failed to load category data', 'error');
+        console.error('Error fetching category:', error);
+        showAlert('Failed to load category data', 'error');
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleInputChange = (e) => {
     const { name, value, checked } = e.target;
@@ -88,6 +92,7 @@ const AdminCategoryForm = () => {
       const categoryData = {
         ...formData,
         slug: generateSlug(formData.name),
+        is_active: Boolean(formData.is_active) // Ensure boolean value
       };
       
       if (isEditMode) {
@@ -96,17 +101,19 @@ const AdminCategoryForm = () => {
       } else {
         await adminAPI.createCategory(categoryData);
         showAlert('Category created successfully', 'success');
-        // Redirect to categories list after a short delay
+      }
+      
+      // Refresh categories list after update
+      if (isEditMode) {
+        await fetchCategoryData();
+      } else {
         setTimeout(() => navigate('/admin/categories'), 1500);
       }
     } catch (error) {
       console.error('Error saving category:', error);
-      
-      // Handle validation errors from API
-      if (error.response && error.response.data) {
+      if (error.response?.data) {
         setErrors(error.response.data);
       }
-      
       showAlert('Failed to save category', 'error');
     } finally {
       setSaving(false);
@@ -176,8 +183,16 @@ const AdminCategoryForm = () => {
             <FormControlLabel
               control={
                 <Switch
-                  checked={formData.is_active}
-                  onChange={handleInputChange}
+                  checked={Boolean(formData.is_active)}
+                  onChange={(e) => {
+                    handleInputChange({
+                      target: {
+                        name: 'is_active',
+                        type: 'checkbox',
+                        checked: e.target.checked
+                      }
+                    });
+                  }}
                   name="is_active"
                   color="primary"
                 />

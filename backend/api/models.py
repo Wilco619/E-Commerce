@@ -90,24 +90,13 @@ class Category(models.Model):
     slug = models.SlugField(unique=True)
     description = models.TextField(blank=True, null=True)
     image = models.ImageField(upload_to='categories/', blank=True, null=True)
-    created_at = models.DateTimeField(default=timezone.now)
-    updated_at = models.DateTimeField(auto_now=True)
+    is_active = models.BooleanField(default=True)
 
     class Meta:
         verbose_name_plural = 'Categories'
-        ordering = ['name']
 
     def __str__(self):
         return self.name
-
-    def save(self, *args, **kwargs):
-        if not self.slug:
-            self.slug = slugify(self.name)
-        super().save(*args, **kwargs)
-
-    def get_product_count(self):
-        """Method to get product count instead of property"""
-        return self.products.filter(is_available=True).count()
 
 class Product(models.Model):
     name = models.CharField(max_length=200)
@@ -159,9 +148,30 @@ class ProductImage(models.Model):
         return f"Image for {self.product.name}"
 
 class Cart(models.Model):
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    user = models.ForeignKey(
+        CustomUser, 
+        on_delete=models.CASCADE,
+        null=True,  # Allow null for guest carts
+        blank=True  # Allow blank for guest carts
+    )
+    session_id = models.CharField(
+        max_length=100, 
+        null=True, 
+        blank=True
+    )  # For guest users
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    models.Q(user__isnull=False) | 
+                    models.Q(session_id__isnull=False)
+                ),
+                name='cart_must_have_user_or_session'
+            )
+        ]
 
     @property
     def total_price(self):
@@ -474,3 +484,14 @@ class OrderItem(models.Model):
     
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
+
+class NewsletterSubscriber(models.Model):
+    email = models.EmailField(unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.email
+
+    class Meta:
+        ordering = ['-created_at']

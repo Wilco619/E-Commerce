@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import {  useNavigate } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
@@ -11,7 +12,10 @@ import {
   Paper,
   Chip,
   Divider,
-  Stack
+  Stack,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
 } from '@mui/material';
 import { 
   TrendingUp as TrendingUpIcon, 
@@ -19,7 +23,11 @@ import {
   ShoppingCart as ShoppingCartIcon,
   AttachMoney as AttachMoneyIcon,
   Pending as PendingIcon,
-  Inventory as InventoryIcon
+  Inventory as InventoryIcon,
+  Dashboard,
+  Category,
+  Inventory,
+  Receipt,
 } from '@mui/icons-material';
 import StatsCard from './StatsCard.jsx';
 import TimeRangeSelector from './TimeRangeSelector.jsx';
@@ -36,6 +44,7 @@ const AdminDashboard = () => {
   const [timeRange, setTimeRange] = useState('week');
   const [activeTab, setActiveTab] = useState(0);
 
+  const navigate = useNavigate();
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
@@ -91,6 +100,65 @@ const AdminDashboard = () => {
         <Typography variant="h4" component="h1" fontWeight="bold" sx={{ mb: 3 }}>
           Admin Dashboard
         </Typography>
+        <>
+          <MenuItem 
+            onClick={() => navigate('/admin')}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'flex-start',
+              padding: '10px 16px'
+            }}
+          >
+            <ListItemIcon>
+              <Dashboard fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Admin Dashboard" />
+          </MenuItem>
+          <Divider />
+          <MenuItem 
+            onClick={() => navigate('/admin/products/new')}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'flex-start',
+              padding: '10px 16px'
+            }}
+          >
+            <ListItemIcon>
+              <Inventory fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Manage Products" />
+          </MenuItem>
+          <MenuItem 
+            onClick={() => navigate('/admin/categories/new')}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'flex-start',
+              padding: '10px 16px'
+            }}
+          >
+            <ListItemIcon>
+              <Category fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Manage Categories" />
+          </MenuItem>
+          <MenuItem 
+            onClick={() => navigate('/admin/orders')}
+            sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'flex-start',
+              padding: '10px 16px'
+            }}
+          >
+            <ListItemIcon>
+              <Receipt fontSize="small" />
+            </ListItemIcon>
+            <ListItemText primary="Manage Orders" />
+          </MenuItem>
+        </>
 
         {/* Enhanced Overview Section */}
         <Paper elevation={3} sx={{ p: 3, mb: 3 }}>

@@ -102,7 +102,7 @@ API.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401 && error.config.url.includes('/checkout/')) {
       sessionStorage.setItem('checkoutAttempted', 'true');
-      window.location.href = '/register';
+      window.location.href = '/login';
       return Promise.reject(error);
     }
     return Promise.reject(error);
@@ -114,7 +114,7 @@ const authAPI = {
   baseURL: API.defaults.baseURL,  
   register: (userData) => {
     const checkoutAttempted = sessionStorage.getItem('checkoutAttempted');
-    return API.post('/auth/register/', {
+    return API.post('/register/', {
       ...userData,
       checkout_attempted: checkoutAttempted ? true : false
     });
@@ -201,19 +201,35 @@ const productsAPI = {
     });
   },
   getCategoryProducts: (categorySlug) => {
-    return API.get(`/products/?category=${categorySlug}`);
+    return API.get(`/products/`, {
+      params: {
+        category_slug: categorySlug  // Change this parameter name to match your backend
+      }
+    });
   },
-  getPopularProducts: () => API.get('/products/popular/'),
+  getPopularProducts: () => {
+    return API.get('/products/popular/').then(response => {
+      // Handle the new response structure that includes count
+      return {
+        ...response,
+        data: response.data.results || response.data
+      };
+    });
+  },
   getCategory: (slug) => API.get(`/categories/${slug}/`),
   createGuestCart: (sessionId) => 
     API.post('/carts/guest/', { user_session_id: sessionId }),
   getGuestCart: (sessionId) => 
-    API.get(`/carts/guest_cart/?user_session_id=${sessionId}`),
+    API.get('/carts/guest_cart/', { 
+      params: { 
+        user_session_id: sessionId 
+      }
+    }),
   addToGuestCart: (sessionId, productId, quantity) => 
-    API.post('/carts/add_guest_item/', {  // Note the updated endpoint
+    API.post('/carts/add_guest_item/', {
       user_session_id: sessionId,
       product_id: productId,
-      quantity
+      quantity: quantity
     }),
   migrateGuestCart: (sessionId) => 
     API.post('/carts/migrate/', { 
@@ -225,38 +241,47 @@ const productsAPI = {
       }
       throw error;
     }),
-  getUserCart: () => API.get('/carts/'),
+  getUserCart: async () => {
+    // First try to get existing cart
+    const response = await API.get('/carts/');
+    
+    // If no cart exists, create one
+    if (!response.data || !response.data.id) {
+        const newCartResponse = await API.post('/carts/');
+        return newCartResponse;
+    }
+    
+    return response;
+  },
   addToUserCart: async (productId, quantity) => {
     try {
-      // First get or create the user's cart
-      const cartResponse = await API.get('/carts/');
-      const cart = cartResponse.data.results[0]; // Get the first cart
-      
-      if (!cart) {
-        throw new Error('No valid cart found');
-      }
-      
-      // Then add item to the specific cart
-      return API.post(`/carts/${cart.id}/add_item/`, {
-        product_id: productId,
-        quantity
-      });
+        // Get or create cart
+        const cartResponse = await productsAPI.getUserCart();
+        const cartId = cartResponse.data.id;
+        
+        // Add item to cart
+        return API.post(`/carts/${cartId}/add_item/`, {
+            product_id: productId,
+            quantity: quantity
+        });
     } catch (error) {
-      console.error('Error adding to user cart:', error);
-      throw error;
+        console.error('Error adding to cart:', error);
+        throw error;
     }
   },
-  
   removeFromUserCart: async (itemId) => {
-    const cartResponse = await API.get('/carts/');
-    if (!cartResponse.data || !cartResponse.data.id) {
-      throw new Error('No valid cart found');
+    try {
+        const cartResponse = await productsAPI.getUserCart();
+        const cartId = cartResponse.data.id;
+        
+        return API.post(`/carts/${cartId}/remove_item/`, {
+            cart_item_id: itemId
+        });
+    } catch (error) {
+        console.error('Error removing from cart:', error);
+        throw error;
     }
-    return API.post(`/carts/${cartResponse.data.id}/remove_item/`, {
-      cart_item_id: itemId
-    });
   },
-  
   updateUserCartItem: async (itemId, quantity) => {
     const cartResponse = await API.get('/carts/');
     if (!cartResponse.data || !cartResponse.data.id) {
@@ -294,6 +319,10 @@ const productsAPI = {
     API.post('/carts/clear_guest_cart/', {
       user_session_id: sessionId
     }),
+
+  subscribeNewsletter: (data) => {
+    return API.post('/newsletter/subscribe/', data);
+  },
 };
 
 // Cart API Services
@@ -383,21 +412,49 @@ const orderAPI = {
 // Admin API Services
 const adminAPI = {
   // Product management
-  createProduct: (productData) => API.post('/products/', productData),
-  updateProduct: (slug, productData) => API.put(`/products/${slug}/`, productData),
+  createProduct: (productData) => {
+    // Create config with multipart/form-data header
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    return API.post('/products/', productData, config);
+  },
+  updateProduct: (slug, productData) => {
+    // Create config with multipart/form-data header
+    const config = {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    };
+    return API.put(`/products/${slug}/`, productData, config);
+  },
   deleteProduct: (slug) => API.delete(`/products/${slug}/`),
+  deleteProductImage: (slug, imageId) => {
+    return API.delete(`/products/${slug}/images/${imageId}/`);
+  },
   
   // Category management
   createCategory: (categoryData) => API.post('/categories/', categoryData),
-  updateCategory: (slug, categoryData) => API.put(`/categories/${slug}/`, categoryData),
-  deleteCategory: (slug) => API.delete(`/categories/${slug}/`),
-  getCategories: () => {
-    console.log('Fetching categories from:', `${API.defaults.baseURL}/categories/`);
-    return API.get('/categories/').catch(error => {
-      console.error('Categories fetch error details:', error.response || error);
-      throw error;
+  updateCategory: (slug, categoryData) => {
+    const formData = new FormData();
+    Object.keys(categoryData).forEach(key => {
+        if (key === 'is_active') {
+            formData.append(key, categoryData[key].toString());
+        } else {
+            formData.append(key, categoryData[key]);
+        }
     });
-  }, // Ensure this endpoint is correct
+    
+    return API.put(`/categories/${slug}/`, formData);
+  },
+  deleteCategory: (slug) => API.delete(`/categories/${slug}/`),
+  getCategories: () => API.get('/categories/', {
+    params: {
+      page_size: 1000 // Adjust based on your needs
+    }
+  }),
 
   // Order management - Using the existing orders endpoints
   getAllOrders: () => API.get('/orders/'),

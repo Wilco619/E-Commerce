@@ -11,28 +11,9 @@ import {
   FormControlLabel,
   Checkbox
 } from '@mui/material';
+import { deliveryAreas } from '../../services/constants';
 
 const ShippingForm = ({ formData, handleFormChange }) => {
-  // Define delivery areas and their types
-  const deliveryAreas = {
-    'CBD Areas': [
-      { value: 'KENCOM', label: 'Kencom', fee: 150 },
-      { value: 'KENYATTA_AVE', label: 'Kenyatta Avenue', fee: 150 },
-      { value: 'MOI_AVE', label: 'Moi Avenue', fee: 150 },
-      // ... add all CBD areas
-    ],
-    'Residential Areas': [
-      { value: 'KIAMBU', label: 'Kiambu Town', fee: 300 },
-      { value: 'RUIRU', label: 'Ruiru', fee: 300 },
-      // ... add all residential areas
-    ],
-    'Satellite Towns': [
-      { value: 'ATHI_RIVER', label: 'Athi River', fee: 300 },
-      { value: 'SYOKIMAU', label: 'Syokimau', fee: 300 },
-      // ... add all satellite towns
-    ]
-  };
-
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
@@ -120,27 +101,17 @@ const ShippingForm = ({ formData, handleFormChange }) => {
         />
       </Grid>
       <Grid item xs={12}>
-        <FormControl fullWidth>
+        <FormControl 
+          fullWidth 
+          required 
+          disabled={formData.is_pickup}
+          error={!formData.is_pickup && !formData.delivery_location}
+        >
           <InputLabel>Delivery Location</InputLabel>
           <Select
             name="delivery_location"
             value={formData.delivery_location}
-            onChange={(e) => {
-              // Find the selected location's fee
-              let fee = 150; // default CBD fee
-              Object.values(deliveryAreas).forEach(areas => {
-                const area = areas.find(a => a.value === e.target.value);
-                if (area) fee = area.fee;
-              });
-              
-              // Update both location and fee
-              handleFormChange({
-                target: { name: 'delivery_location', value: e.target.value }
-              });
-              handleFormChange({
-                target: { name: 'delivery_fee', value: fee }
-              });
-            }}
+            onChange={handleFormChange}
           >
             {Object.entries(deliveryAreas).map(([groupName, areas]) => [
               <ListSubheader key={groupName}>{groupName}</ListSubheader>,
@@ -152,7 +123,11 @@ const ShippingForm = ({ formData, handleFormChange }) => {
             ])}
           </Select>
           <FormHelperText>
-            Delivery fee will be calculated based on location
+            {formData.is_pickup 
+              ? 'Delivery location not required for pickup orders' 
+              : formData.delivery_location
+                ? 'Delivery fee will be calculated based on location'
+                : 'Please select a delivery location or choose pickup option'}
           </FormHelperText>
         </FormControl>
       </Grid>
@@ -179,6 +154,11 @@ const ShippingForm = ({ formData, handleFormChange }) => {
           }
           label="I will pick up the item at the Office/Shop"
         />
+        {!formData.is_pickup && !formData.delivery_location && (
+          <FormHelperText error>
+            Please either select a delivery location or choose pickup option
+          </FormHelperText>
+        )}
       </Grid>
     </Grid>
   );

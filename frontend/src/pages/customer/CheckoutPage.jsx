@@ -19,6 +19,7 @@ import PaymentForm from './PaymentForm';
 import OrderSummary from './OrderSummary';
 import MpesaDialog from './MpesaDialog';
 import { cartAPI, orderAPI, authAPI } from '../../services/api';
+import { deliveryAreas } from '../../services/constants';
 
 const steps = ['Shipping Information', 'Payment Method', 'Review Order'];
 
@@ -86,11 +87,38 @@ const CheckoutPage = () => {
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
     const newValue = type === 'checkbox' ? checked : value;
-    setFormData((prevFormData) => ({
-      ...prevFormData,
-      [name]: newValue,
-      delivery_fee: name === 'is_pickup' && checked ? 0 : 0 // Set delivery fee to 100 if not pickup
-    }));
+
+    setFormData(prevFormData => {
+      const updates = {
+        ...prevFormData,
+        [name]: newValue,
+      };
+
+      // Handle pickup and delivery location updates
+      if (name === 'is_pickup') {
+        if (checked) {
+          // If pickup is selected, clear delivery location and set fee to 0
+          updates.delivery_location = '';
+          updates.delivery_fee = 0;
+        }
+      } else if (name === 'delivery_location') {
+        // Only update delivery fee if not pickup
+        if (!prevFormData.is_pickup) {
+          updates.delivery_fee = findDeliveryFee(value);
+        }
+      }
+
+      return updates;
+    });
+  };
+
+  // Add helper function to find delivery fee
+  const findDeliveryFee = (locationValue) => {
+    for (const [_, areas] of Object.entries(deliveryAreas)) {
+      const area = areas.find(area => area.value === locationValue);
+      if (area) return area.fee;
+    }
+    return 0;
   };
 
   const handleNext = () => {
@@ -111,8 +139,8 @@ const CheckoutPage = () => {
 
   const validateStep = () => {
     if (activeStep === 0) {
-      // Validate shipping information
-      return !!(
+      // Check required shipping fields
+      const hasRequiredFields = !!(
         formData.full_name && 
         formData.email && 
         formData.phone_number && 
@@ -121,11 +149,16 @@ const CheckoutPage = () => {
         formData.postal_code && 
         formData.country
       );
+
+      // Check either pickup or delivery location is selected
+      const hasDeliveryMethod = !!(
+        formData.is_pickup || 
+        (!formData.is_pickup && formData.delivery_location)
+      );
+
+      return hasRequiredFields && hasDeliveryMethod;
     }
-    if (activeStep === 1) {
-      // Validate payment method
-      return !!formData.payment_method;
-    }
+    // ... rest of the validation logic
     return true;
   };
 
@@ -135,7 +168,7 @@ const CheckoutPage = () => {
       setMpesaProcessing(true);
       setMpesaDialogOpen(true);
       
-      const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee);
+      const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee || 0);
       
       // Format the phone number for M-Pesa
       let phoneNumber = formData.phone_number;

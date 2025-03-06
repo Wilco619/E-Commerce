@@ -45,8 +45,8 @@ const CategoryPage = () => {
         ]);
 
         setCategoryDetails(categoryResponse.data);
-        // Handle paginated response
         setProducts(productsResponse.data.results || productsResponse.data);
+        
       } catch (err) {
         setError('Failed to load category. Please try again later.');
         console.error('Error fetching category:', err);
