@@ -254,15 +254,7 @@ class ProductListSerializer(serializers.ModelSerializer):
         return instance
 
     def create(self, validated_data):
-        # Generate slug from name
-        name = validated_data.get('name')
-        slug = slugify(name)
-        
-        # Ensure unique slug
-        if Product.objects.filter(slug=slug).exists():
-            slug = f"{slug}-{timezone.now().timestamp()}"
-        
-        validated_data['slug'] = slug
+
         return super().create(validated_data)
 
 
@@ -324,24 +316,10 @@ class ProductDetailSerializer(serializers.ModelSerializer):
         read_only_fields = ['slug']
 
     def create(self, validated_data):
-        # Generate slug from name
-        name = validated_data.get('name')
-        slug = slugify(name)
-        
-        # Ensure unique slug
-        if Product.objects.filter(slug=slug).exists():
-            slug = f"{slug}-{timezone.now().timestamp()}"
-        
-        validated_data['slug'] = slug
+       
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # Update slug if name changes
-        if 'name' in validated_data and validated_data['name'] != instance.name:
-            new_slug = slugify(validated_data['name'])
-            if Product.objects.filter(slug=new_slug).exclude(id=instance.id).exists():
-                new_slug = f"{new_slug}-{timezone.now().timestamp()}"
-            validated_data['slug'] = new_slug
         
         # Remove images from validated_data if present
         validated_data.pop('images', None)
@@ -369,27 +347,18 @@ class CartItemSerializer(serializers.ModelSerializer):
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
-    total = serializers.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        read_only=True
-    )
+    total = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ['id', 'user', 'session_id', 'items', 'total', 
-                 'created_at', 'updated_at']
-        read_only_fields = ['user', 'session_id', 'total']
+        fields = ['id', 'user', 'cart_type', 'items', 'total']
+        read_only_fields = ['user', 'cart_type']
 
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        # Calculate totals
-        total_price = sum(item.total_price for item in instance.items.all())
-        total_items = sum(item.quantity for item in instance.items.all())
-        
-        data['total_price'] = float(total_price)
-        data['total_items'] = total_items
-        return data
+    def get_total(self, obj):
+        return sum(
+            item.quantity * (item.product.discount_price or item.product.price)
+            for item in obj.items.all()
+        )
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
@@ -456,17 +425,39 @@ class CheckoutSerializer(serializers.ModelSerializer):
         
         return order
 
+class ProductSerializer(serializers.ModelSerializer):
+    images = ProductImageSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = Product
+        fields = ['id', 'name', 'slug', 'price', 'discount_price', 'stock', 
+                 'is_available', 'images']
+
 class GuestCartItemSerializer(serializers.ModelSerializer):
+    product = ProductSerializer(read_only=True)
+    total = serializers.SerializerMethodField()
+    
     class Meta:
         model = GuestCartItem
-        fields = ['id', 'product', 'quantity']
+        fields = ['id', 'product', 'quantity', 'added_at', 'total']
+    
+    def get_total(self, obj):
+        product_price = obj.product.discount_price or obj.product.price
+        return obj.quantity * product_price
 
 class GuestCartSerializer(serializers.ModelSerializer):
     items = GuestCartItemSerializer(many=True, read_only=True)
-
+    total = serializers.SerializerMethodField()
+    
     class Meta:
         model = GuestCart
-        fields = ['id', 'session_id', 'items']
+        fields = ['id', 'user_session_id', 'items', 'total', 'created_at', 'updated_at']
+
+    def get_total(self, obj):
+        return sum(
+            item.quantity * (item.product.discount_price or item.product.price)
+            for item in obj.items.all()
+        )
 
 class NewsletterSubscriberSerializer(serializers.ModelSerializer):
     class Meta:

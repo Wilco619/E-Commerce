@@ -10,7 +10,7 @@ const PaymentForm = ({ formData, handleFormChange }) => {
         value={formData.payment_method}
         onChange={handleFormChange}
       >
-        <FormControlLabel 
+        {/* <FormControlLabel 
           value="CREDIT_CARD" 
           control={<Radio />} 
           label="Credit Card" 
@@ -24,7 +24,7 @@ const PaymentForm = ({ formData, handleFormChange }) => {
           value="BANK_TRANSFER" 
           control={<Radio />} 
           label="Bank Transfer" 
-        />
+        /> */}
         <FormControlLabel 
           value="M-Pesa" 
           control={<Radio />} 

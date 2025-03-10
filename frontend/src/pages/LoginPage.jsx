@@ -266,6 +266,16 @@ const LoginPage = () => {
           </Box>
         </Box>
       </Paper>
+      <Box sx={{ mt: 2, textAlign: 'center' }}>
+        <Link
+          component={RouterLink}
+          to="/forgot-password"
+          variant="body2"
+          sx={{ textDecoration: 'none' }}
+        >
+          Forgot password?
+        </Link>
+      </Box>
     </Container>
   );
 };

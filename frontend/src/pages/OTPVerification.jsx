@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper, Stack, AlertTitle } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { authAPI } from '../services/api';
-import { ACCESS_TOKEN, REFRESH_TOKEN } from '../services/constants';
+import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from '../services/constants';
 
 const OTPVerification = () => {
   const [otp, setOtp] = useState('');
@@ -23,22 +23,32 @@ const OTPVerification = () => {
     setError('');
 
     try {
-      const response = await authAPI.verifyOTP({ user_id: userId, otp });
+      // Get session ID for cart migration
+      const sessionId = localStorage.getItem(GUEST_SESSION_ID);
+      
+      const response = await authAPI.verifyOTP({ 
+        user_id: userId, 
+        otp,
+        user_session_id: sessionId
+      });
 
       // Store tokens in localStorage
       localStorage.setItem(ACCESS_TOKEN, response.data.access);
       localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
 
-      // Clear user_id from session storage
+      // Clear guest session data if cart was migrated
       sessionStorage.removeItem('user_id');
+      if (response.data.cart_migrated) {
+        localStorage.removeItem(GUEST_SESSION_ID);
+      }
 
       setSuccess(true);
-
-      // Redirect to home or dashboard after successful verification
-      navigate('/');
+      setTimeout(() => {
+        navigate('/');
+      }, 1000);
     } catch (err) {
       setLoading(false);
-      setError('Invalid OTP. Please try again.');
+      setError(err.response?.data?.error || 'Invalid OTP. Please try again.');
     }
   };
   

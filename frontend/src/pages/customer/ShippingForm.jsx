@@ -117,7 +117,7 @@ const ShippingForm = ({ formData, handleFormChange }) => {
               <ListSubheader key={groupName}>{groupName}</ListSubheader>,
               ...areas.map(area => (
                 <MenuItem key={area.value} value={area.value}>
-                  {area.label} - Ksh {area.fee}
+                  {area.label}
                 </MenuItem>
               ))
             ])}

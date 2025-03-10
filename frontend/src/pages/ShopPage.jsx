@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Container, Box, Typography, Button, Paper, Grid, TextField, InputAdornment, IconButton, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox, Slider, Drawer, List, ListItem, Chip, CircularProgress, Pagination, Breadcrumbs, Link, Card, CardMedia, CardContent, CardActions 
 } from '@mui/material';
@@ -33,9 +33,9 @@ const ShopPage = () => {
   // Filter State
   const [searchTerm, setSearchTerm] = useState(queryParams.get('q') || '');
   const [selectedCategory, setSelectedCategory] = useState(queryParams.get('category') || '');
-  const [sortBy, setSortBy] = useState(queryParams.get('sort') || 'created_at');
-  const [inStockOnly, setInStockOnly] = useState(queryParams.get('inStock') === 'true');
-  const [priceRange, setPriceRange] = useState([0, 1000]);
+  const [sortBy, setSortBy] = useState('');  // Remove default 'created_at'
+  const [inStockOnly, setInStockOnly] = useState(false);
+  const [priceRange, setPriceRange] = useState([0, 50000]);  // Increase max price range
   const [page, setPage] = useState(parseInt(queryParams.get('page')) || 1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -59,42 +59,71 @@ const ShopPage = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const fetchProducts = async () => {
-      try {
-        setLoading(true);
-        const response = await productsAPI.getProducts({
-          search: searchTerm,
-          category: selectedCategory,
-          sort: sortBy,
-          inStock: inStockOnly,
-          price_min: priceRange[0],
-          price_max: priceRange[1],
-          page: page,
-        });
-        setProducts(response.data.results);
-        setTotalPages(response.data.total_pages);
-        setLoading(false);
-      } catch (error) {
-        console.error('Error fetching products:', error);
-        setError('Failed to load products. Please try again.');
-        setLoading(false);
+  const fetchProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Only include parameters that have values
+      const params = {};
+      
+      if (searchTerm) params.search = searchTerm;
+      if (selectedCategory) params.category = selectedCategory;
+      if (sortBy) params.sortBy = sortBy;
+      if (inStockOnly) params.inStockOnly = inStockOnly;
+      if (priceRange[0] > 0) params.priceMin = priceRange[0];
+      if (priceRange[1] < 50000) params.priceMax = priceRange[1];
+      if (page > 1) params.page = page;
+
+      console.log('Fetching products with params:', params);
+      const response = await productsAPI.getProducts(params);
+      console.log('Products response:', response.data);
+
+      if (response.data) {
+        const productsData = response.data.results || response.data;
+        const totalItems = response.data.count || productsData.length;
+
+        setProducts(productsData);
+        setTotalPages(Math.ceil(totalItems / 12));
+      } else {
+        setProducts([]);
+        setTotalPages(0);
       }
-    };
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      setError('Failed to load products. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [searchTerm, selectedCategory, sortBy, inStockOnly, priceRange, page]);
 
+  useEffect(() => {
     fetchProducts();
+  }, [fetchProducts]);
 
-    // Update URL with current filters
-    const params = new URLSearchParams();
-    if (searchTerm) params.set('q', searchTerm);
-    if (selectedCategory) params.set('category', selectedCategory);
-    if (sortBy) params.set('sort', sortBy);
-    if (inStockOnly) params.set('inStock', inStockOnly);
-    if (page > 1) params.set('page', page);
-    
-    const newUrl = `${location.pathname}?${params.toString()}`;
-    navigate(newUrl, { replace: true });
-  }, [searchTerm, selectedCategory, sortBy, inStockOnly, priceRange, page, location.pathname, navigate]);
+  // Update your sort handler to match the API expectations
+  const handleSortChange = (event) => {
+    const value = event.target.value;
+    setSortBy(value);
+    setPage(1);
+  };
+
+  // Add a debug section to help troubleshoot
+  useEffect(() => {
+    console.log('Current state:', {
+      products: products.length,
+      loading,
+      error,
+      searchTerm,
+      selectedCategory,
+      sortBy,
+      inStockOnly,
+      priceRange,
+      page,
+      totalPages
+    });
+  }, [products, loading, error, searchTerm, selectedCategory, sortBy, 
+      inStockOnly, priceRange, page, totalPages]);
 
   const handleSearch = (event) => {
     event.preventDefault();
@@ -108,10 +137,6 @@ const ShopPage = () => {
   const handleCategoryChange = (event) => {
     setSelectedCategory(event.target.value);
     setPage(1);
-  };
-
-  const handleSortChange = (event) => {
-    setSortBy(event.target.value);
   };
 
   const handleInStockChange = (event) => {
@@ -248,9 +273,11 @@ const ShopPage = () => {
                 onChange={handleSortChange}
                 label="Sort By"
               >
-                <MenuItem value="created_at">Newest</MenuItem>
+                <MenuItem value="">Default</MenuItem>
+                <MenuItem value="created_at">Newest First</MenuItem>
                 <MenuItem value="price_asc">Price: Low to High</MenuItem>
                 <MenuItem value="price_desc">Price: High to Low</MenuItem>
+                <MenuItem value="name">Name: A to Z</MenuItem>
               </Select>
             </FormControl>
           </Grid>
@@ -395,6 +422,44 @@ const ShopPage = () => {
             </Box>
           </Box>
         </Drawer>
+
+        {loading && (
+          <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
+            <CircularProgress />
+          </Box>
+        )}
+
+        {error && (
+          <Box textAlign="center" py={4}>
+            <Typography color="error" gutterBottom>
+              {error}
+            </Typography>
+            <Button variant="contained" onClick={fetchProducts}>
+              Try Again
+            </Button>
+          </Box>
+        )}
+
+        {!loading && !error && products.length === 0 && (
+          <Box textAlign="center" py={4}>
+            <Typography variant="h6" gutterBottom>
+              No products found
+            </Typography>
+            <Typography variant="body2" color="textSecondary" paragraph>
+              Try adjusting your filters or search criteria
+            </Typography>
+            <Button variant="contained" onClick={() => {
+              setSearchTerm('');
+              setSelectedCategory('');
+              setSortBy('');
+              setInStockOnly(false);
+              setPriceRange([0, 50000]);
+              setPage(1);
+            }}>
+              Clear All Filters
+            </Button>
+          </Box>
+        )}
 
         {loading ? (
           <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">

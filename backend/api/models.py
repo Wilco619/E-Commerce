@@ -1,3 +1,5 @@
+from uuid import uuid4
+from django.conf import settings
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import MinValueValidator
@@ -108,13 +110,27 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True)
     is_feature = models.BooleanField(default=False)  # Remove null=True
     category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
+    sku = models.CharField(max_length=100, unique=True, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def save(self, *args, **kwargs):
-            if not self.slug:
-                self.slug = slugify(self.name)
-            super().save(*args, **kwargs)
+        if not self.sku:
+            # Generate SKU if not provided
+            self.sku = f'SKU-{timezone.now().strftime("%Y%m%d")}-{str(uuid4())[:8]}'
+        if not self.slug:
+            # Generate base slug from name
+            base_slug = slugify(self.name)
+            
+            # Check for existing slugs
+            unique_slug = base_slug
+            n = 1
+            while Product.objects.filter(slug=unique_slug).exists():
+                # If exists, append a number but keep it clean
+                unique_slug = f"{base_slug}-{n}"
+                n += 1
+            self.slug = unique_slug
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
@@ -148,30 +164,42 @@ class ProductImage(models.Model):
         return f"Image for {self.product.name}"
 
 class Cart(models.Model):
-    user = models.ForeignKey(
-        CustomUser, 
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        null=True,  # Allow null for guest carts
-        blank=True  # Allow blank for guest carts
+        null=True,
+        blank=True,
+        related_name='cart'
     )
-    session_id = models.CharField(
-        max_length=100, 
-        null=True, 
-        blank=True
-    )  # For guest users
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    session_id = models.CharField(max_length=100, null=True, blank=True)
+    cart_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('guest', 'Guest Cart'),
+            ('authenticated', 'Authenticated Cart')
+        ),
+        default='guest'
+    )
 
     class Meta:
         constraints = [
-            models.CheckConstraint(
-                check=(
-                    models.Q(user__isnull=False) | 
-                    models.Q(session_id__isnull=False)
-                ),
-                name='cart_must_have_user_or_session'
+            models.UniqueConstraint(
+                fields=['user'],
+                condition=models.Q(user__isnull=False),
+                name='unique_user_cart'
+            ),
+            models.UniqueConstraint(
+                fields=['session_id'],
+                condition=models.Q(session_id__isnull=False),
+                name='unique_guest_cart'
             )
         ]
+
+    def save(self, *args, **kwargs):
+        if self.user:
+            self.cart_type = 'authenticated'
+            self.session_id = None
+        super().save(*args, **kwargs)
 
     @property
     def total_price(self):
@@ -196,34 +224,28 @@ def get_expiry_time():
     return timezone.now() + timedelta(hours=24)
 
 class GuestCart(models.Model):
-    session_id = models.CharField(max_length=100, unique=True)
-    user_session_id = models.CharField(
-        max_length=100,
-        default='legacy_session',
-        help_text='Unique identifier for guest user session'
-    )
+    user_session_id = models.CharField(max_length=100, unique=True)
+    session_id = models.CharField(max_length=100)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(default=get_expiry_time)
-
-    class Meta:
-        unique_together = ['session_id', 'user_session_id']
-
-    def save(self, *args, **kwargs):
-        if not self.pk:  # Only set expires_at for new instances
-            self.expires_at = timezone.now() + timedelta(hours=24)
-        super().save(*args, **kwargs)
-
-    def is_expired(self):
-        return timezone.now() >= self.expires_at
-
-    def __str__(self):
-        return f"Guest Cart {self.session_id}"
+    expires_at = models.DateTimeField(default=timezone.now() + timezone.timedelta(hours=24))
 
     @classmethod
     def cleanup_expired_carts(cls):
-        """Remove expired guest carts"""
+        """Delete expired guest carts"""
         cls.objects.filter(expires_at__lt=timezone.now()).delete()
+
+    def is_expired(self):
+        return self.expires_at < timezone.now()
+
+    def __str__(self):
+        return f"Guest Cart {self.user_session_id}"
+
+    def save(self, *args, **kwargs):
+        # Update expiration time on each save
+        if self.pk:  # If cart already exists
+            self.expires_at = timezone.now() + timezone.timedelta(hours=24)
+        super().save(*args, **kwargs)
 
 class GuestCartItem(models.Model):
     cart = models.ForeignKey(GuestCart, related_name='items', on_delete=models.CASCADE)

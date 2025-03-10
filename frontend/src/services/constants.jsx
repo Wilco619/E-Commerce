@@ -1,5 +1,10 @@
 export const ACCESS_TOKEN = "access_token";
 export const REFRESH_TOKEN = "refresh_token";
+export const GUEST_SESSION_ID = "guestSessionId";
+export const CART_TYPE = {
+  GUEST: 'guest',
+  AUTHENTICATED: 'authenticated'
+};
 
 export const deliveryAreas = {
   'CBD Areas': [

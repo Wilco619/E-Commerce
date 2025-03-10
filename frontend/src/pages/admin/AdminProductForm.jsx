@@ -181,55 +181,59 @@ const AdminProductForm = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      return;
+        return;
     }
 
     try {
-      setLoading(true);
-      setServerError(null);
+        setLoading(true);
+        setServerError(null);
 
-      // Create FormData object
-      const formDataObj = new FormData();
-      
-      // Append all form fields
-      Object.keys(formData).forEach(key => {
-        if (key === 'category') {
-          // Send category as category_id
-          formDataObj.append('category_id', formData[key]);
-        } else if (typeof formData[key] === 'boolean') {
-          formDataObj.append(key, formData[key].toString());
-        } else if (formData[key] !== null && formData[key] !== undefined) {
-          formDataObj.append(key, formData[key]);
-        }
-      });
-
-      // Append each new image file
-      if (selectedFiles.length > 0) {
-        selectedFiles.forEach(file => {
-          formDataObj.append('images', file);
+        // Create FormData object
+        const formDataObj = new FormData();
+        
+        // Append all form fields
+        Object.keys(formData).forEach(key => {
+            if (key === 'category') {
+                formDataObj.append('category_id', formData[key]);
+            } else if (typeof formData[key] === 'boolean') {
+                formDataObj.append(key, formData[key].toString());
+            } else if (formData[key] !== null && formData[key] !== undefined) {
+                formDataObj.append(key, formData[key]);
+            }
         });
-      }
 
-      let response;
-      if (isEditMode) {
-        response = await adminAPI.updateProduct(slug, formDataObj);
-      } else {
-        response = await adminAPI.createProduct(formDataObj);
-      }
+        // Append each new image file separately
+        if (selectedFiles.length > 0) {
+            selectedFiles.forEach(file => {
+                formDataObj.append('images[]', file); // Note the [] to handle multiple files
+            });
+        }
 
-      setSuccessMessage(`Product ${isEditMode ? 'updated' : 'created'} successfully!`);
-      
-      // Redirect after a short delay
-      setTimeout(() => {
-        navigate('/admin/products');
-      }, 2000);
+        let response;
+        if (isEditMode) {
+            response = await adminAPI.updateProduct(slug, formDataObj);
+        } else {
+            response = await adminAPI.createProduct(formDataObj);
+        }
+
+        setSuccessMessage(`Product ${isEditMode ? 'updated' : 'created'} successfully!`);
+        
+        // Redirect after a short delay
+        setTimeout(() => {
+            navigate('/admin/products');
+        }, 2000);
     } catch (err) {
-      console.error("Error submitting product form:", err);
-      setServerError(err.response?.data?.error || "Failed to save product. Please try again.");
+        console.error("Error submitting product form:", err.response?.data || err);
+        setServerError(err.response?.data?.error || "Failed to save product. Please try again.");
+        
+        // Handle field-specific errors
+        if (err.response?.data) {
+            setFormErrors(err.response.data);
+        }
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
-  };
+};
 
   const handleCancel = () => {
     navigate('/admin/products');

@@ -63,17 +63,30 @@ const CheckoutPage = () => {
           authAPI.getCurrentUser()
         ]);
 
-        setCart(cartResponse.data.results[0]); // Ensure to set the first cart from results
+        // Handle different cart response structures
+        const cartData = cartResponse.data;
+        if (Array.isArray(cartData.results)) {
+          // If response has results array, take the first cart
+          setCart(cartData.results[0]);
+        } else if (Array.isArray(cartData)) {
+          // If response is direct array
+          setCart(cartData[0]);
+        } else {
+          // If response is a single cart object
+          setCart(cartData);
+        }
 
         const profileData = profileResponse.data;
         setFormData((prevFormData) => ({
           ...prevFormData,
-          full_name: `${profileData.first_name} ${profileData.last_name}`,
-          email: profileData.email,
-          phone_number: profileData.phone_number,
-          address: profileData.address
+          full_name: profileData.first_name && profileData.last_name 
+            ? `${profileData.first_name} ${profileData.last_name}`
+            : '',
+          email: profileData.email || '',
+          phone_number: profileData.phone_number || '',
+          address: profileData.address || ''
         }));
-      } catch ( err ) {
+      } catch (err) {
         setError('Failed to load your cart or profile information. Please try again.');
         console.error('Error fetching cart or profile:', err);
       } finally {
@@ -168,7 +181,13 @@ const CheckoutPage = () => {
       setMpesaProcessing(true);
       setMpesaDialogOpen(true);
       
-      const orderTotal = parseFloat(cart.total_price) + parseFloat(formData.delivery_fee || 0);
+      // Calculate total including delivery fee
+      const subtotal = cart.items.reduce((total, item) => {
+        const itemPrice = parseFloat(item.product.discount_price || item.product.price);
+        return total + (itemPrice * item.quantity);
+      }, 0);
+      
+      const orderTotal = subtotal + parseFloat(formData.delivery_fee || 0);
       
       // Format the phone number for M-Pesa
       let phoneNumber = formData.phone_number;
@@ -178,7 +197,7 @@ const CheckoutPage = () => {
       
       const mpesaPaymentData = {
         phone_number: phoneNumber,
-        amount: orderTotal
+        amount: orderTotal.toFixed(2) // Ensure amount is properly formatted
       };
       
       const response = await orderAPI.initiateMpesaPayment(mpesaPaymentData);
@@ -281,19 +300,29 @@ const CheckoutPage = () => {
   const handlePlaceOrder = async (mpesaCheckoutId = null) => {
     try {
       setLoading(true);
+      
+      // Calculate totals
+      const subtotal = cart.items.reduce((total, item) => {
+        const itemPrice = parseFloat(item.product.discount_price || item.product.price);
+        return total + (itemPrice * item.quantity);
+      }, 0);
+      
+      const orderTotal = subtotal + parseFloat(formData.delivery_fee || 0);
+      
       const orderData = {
         ...formData,
         cart_id: cart.id,
-        order_total: parseFloat(cart.total_price) + parseFloat(formData.delivery_fee),
+        subtotal: subtotal.toFixed(2),
+        delivery_fee: parseFloat(formData.delivery_fee || 0).toFixed(2),
+        order_total: orderTotal.toFixed(2),
         phone_number: formData.phone_number,
       };
       
       // If this is an M-Pesa payment, add the checkout ID
       if (mpesaCheckoutId) {
         orderData.mpesa_checkout_id = mpesaCheckoutId;
-        orderData.payment_status = 'COMPLETED'; // Use a valid choice for payment_status
+        orderData.payment_status = 'COMPLETED';
         setMpesaOrderPlaced(true);
-        console.log('Placing order with M-Pesa payment:', orderData);
       }
       
       console.log('Placing order with data:', orderData);
@@ -320,6 +349,22 @@ const CheckoutPage = () => {
       setMpesaProcessing(false);
     }
   };
+
+  // Add a useEffect to calculate cart totals
+  useEffect(() => {
+    if (cart?.items) {
+      const subtotal = cart.items.reduce((total, item) => {
+        const itemPrice = parseFloat(item.product.discount_price || item.product.price);
+        return total + (itemPrice * item.quantity);
+      }, 0);
+      
+      setCart(prevCart => ({
+        ...prevCart,
+        subtotal: subtotal.toFixed(2),
+        total_price: (subtotal + parseFloat(formData.delivery_fee || 0)).toFixed(2)
+      }));
+    }
+  }, [cart?.items, formData.delivery_fee]);
 
   const renderShippingForm = () => (
     <ShippingForm formData={formData} handleFormChange={handleFormChange} />

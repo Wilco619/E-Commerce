@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Typography, 
   Container, 
@@ -23,68 +23,88 @@ import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
-import { cartAPI } from '../services/api';
+import { productsAPI } from '../services/api';
+import { useAuth } from '../authentication/AuthContext';
+import { useCart } from '../authentication/CartContext';
 import { useNavigate } from 'react-router-dom';
+import { GUEST_SESSION_ID } from '../services/constants';
 
 const CartPage = () => {
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [toast, setToast] = useState({ open: false, message: '', severity: 'info' });
-  const navigate = useNavigate();
 
   useEffect(() => {
     fetchCart();
   }, []);
 
+  const navigate = useNavigate();
+  const { isAuthenticated } = useAuth();
+  const { cartType } = useCart();  // Add cartType from useCart
+
   const fetchCart = async () => {
     try {
       setLoading(true);
-      // First try to get an existing cart
-      let response = await cartAPI.getCart();
-      
-      // If no cart exists, create one
-      if (response.data.results.length === 0) {
-        response = await cartAPI.createCart();
-        setCart(response.data);
+      setError(null);
+
+      let response;
+      if (isAuthenticated) {
+        response = await productsAPI.getUserCart();
       } else {
-        setCart(response.data.results[0]); // Take the first cart
+        const sessionId = localStorage.getItem(GUEST_SESSION_ID);
+        if (!sessionId) {
+          setCart(null);
+          return;
+        }
+        // Use the guest cart endpoint that includes product details
+        response = await productsAPI.getGuestCart(sessionId);
       }
-      
-      setLoading(false);
+
+      // The cart data should now include complete product details
+      setCart(response.data);
     } catch (err) {
       console.error('Error fetching cart:', err);
       setError('Failed to load your shopping cart');
+    } finally {
       setLoading(false);
     }
   };
 
   const handleUpdateQuantity = async (cartItemId, quantity, currentStock) => {
     try {
-        if (quantity <= 0) {
-            await handleRemoveItem(cartItemId);
-            return;
-        }
-        
-        // Check if requested quantity exceeds available stock
-        if (quantity > currentStock) {
-            showToast(`Only ${currentStock} items available`, 'error');
-            return;
-        }
-        
-        await cartAPI.updateCartItem(cartItemId, quantity);
-        await fetchCart();
-        showToast('Cart updated successfully', 'success');
+      if (quantity <= 0) {
+        await handleRemoveItem(cartItemId);
+        return;
+      }
+
+      const sessionId = !isAuthenticated ? localStorage.getItem(GUEST_SESSION_ID) : null;
+      
+      if (isAuthenticated) {
+        await productsAPI.updateUserCartItem(cartItemId, quantity);
+      } else {
+        await productsAPI.updateGuestCartItem(sessionId, cartItemId, quantity);
+      }
+
+      await fetchCart();
+      showToast('Cart updated successfully', 'success');
     } catch (err) {
-        console.error('Error updating cart:', err);
-        showToast(err.response?.data?.error || 'Failed to update cart', 'error');
+      console.error('Error updating cart:', err);
+      showToast(err.response?.data?.error || 'Failed to update cart', 'error');
     }
   };
 
   const handleRemoveItem = async (cartItemId) => {
     try {
-      await cartAPI.removeFromCart(cartItemId);
-      await fetchCart(); // Refresh cart after removal
+      const sessionId = !isAuthenticated ? localStorage.getItem(GUEST_SESSION_ID) : null;
+
+      if (isAuthenticated) {
+        await productsAPI.removeFromUserCart(cartItemId);
+      } else {
+        await productsAPI.removeFromGuestCart(sessionId, cartItemId);
+      }
+
+      await fetchCart();
       showToast('Item removed from cart', 'success');
     } catch (err) {
       console.error('Error removing item:', err);
@@ -94,8 +114,15 @@ const CartPage = () => {
 
   const handleClearCart = async () => {
     try {
-      await cartAPI.clearCart();
-      await fetchCart(); // Refresh cart after clearing
+      const sessionId = !isAuthenticated ? localStorage.getItem(GUEST_SESSION_ID) : null;
+
+      if (isAuthenticated) {
+        await productsAPI.clearUserCart();
+      } else {
+        await productsAPI.clearGuestCart(sessionId);
+      }
+
+      await fetchCart();
       showToast('Cart cleared successfully', 'success');
     } catch (err) {
       console.error('Error clearing cart:', err);
@@ -103,17 +130,163 @@ const CartPage = () => {
     }
   };
 
-  const handleCheckout = () => {
-    navigate('/checkout', { state: { cartId: cart.id } });
-  };
+  // Calculate cart items count
+  const cartItemsCount = useMemo(() => {
+    if (loading) return 0;
+    return cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
+  }, [cart, loading]);
 
-  const showToast = (message, severity) => {
+  const handleCheckoutClick = useCallback(() => {
+    if (!isAuthenticated && cartItemsCount > 0) {
+      sessionStorage.setItem('redirectAfterLogin', '/checkout');
+      navigate('/login');
+    } else {
+      navigate('/checkout', { state: { cartId: cart.id } });
+    }
+  }, [isAuthenticated, cartItemsCount, navigate, cart]); // Added cart to the dependency array
+
+  const showToast = (message, severity = 'info') => {
     setToast({ open: true, message, severity });
   };
 
   const handleCloseToast = () => {
     setToast({ ...toast, open: false });
   };
+
+  // Update the cart items rendering with proper price calculations
+  const renderCartItems = () => {
+    if (!cart?.items?.length) {
+      return (
+        <TableRow>
+          <TableCell colSpan={5} align="center">
+            <Typography variant="body1">Your cart is empty</Typography>
+          </TableCell>
+        </TableRow>
+      );
+    }
+
+    return cart.items.map((item) => {
+      const price = parseFloat(item.product?.discount_price || item.product?.price || 0);
+      const quantity = parseInt(item.quantity || 0);
+      const itemTotal = price * quantity;
+
+      return (
+        <TableRow key={item.id}>
+          <TableCell>
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              {item.product?.images?.[0]?.image && (
+                <Box 
+                  component="img" 
+                  src={item.product.images[0].image}
+                  alt={item.product.name}
+                  sx={{ width: 60, height: 60, objectFit: 'contain', mr: 2 }}
+                />
+              )}
+              <Box>
+                <Typography variant="subtitle2">{item.product?.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  {item.product?.sku}
+                </Typography>
+              </Box>
+            </Box>
+          </TableCell>
+          <TableCell align="right">
+            <Typography>
+              Ksh {price.toFixed(2)}
+            </Typography>
+          </TableCell>
+          <TableCell align="center">
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <IconButton 
+                size="small"
+                onClick={() => handleUpdateQuantity(item.id, quantity - 1)}
+                disabled={quantity <= 1}
+              >
+                <RemoveIcon />
+              </IconButton>
+              <Typography sx={{ mx: 2 }}>{quantity}</Typography>
+              <IconButton 
+                size="small"
+                onClick={() => handleUpdateQuantity(item.id, quantity + 1)}
+                disabled={quantity >= item.product?.stock}
+              >
+                <AddIcon />
+              </IconButton>
+            </Box>
+          </TableCell>
+          <TableCell align="right">
+            <Typography>
+              Ksh {itemTotal.toFixed(2)}
+            </Typography>
+          </TableCell>
+          <TableCell align="center">
+            <IconButton 
+              color="error"
+              onClick={() => handleRemoveItem(item.id)}
+            >
+              <DeleteIcon />
+            </IconButton>
+          </TableCell>
+        </TableRow>
+      );
+    });
+  };
+
+  // Calculate cart totals with proper number handling
+  const cartTotals = useMemo(() => {
+    if (!cart?.items?.length) return { totalItems: 0, subtotal: 0 };
+    
+    return cart.items.reduce((totals, item) => {
+      const price = parseFloat(item.product?.discount_price || item.product?.price || 0);
+      const quantity = parseInt(item.quantity || 0);
+      const itemTotal = price * quantity;
+
+      return {
+        totalItems: totals.totalItems + quantity,
+        subtotal: totals.subtotal + itemTotal
+      };
+    }, { totalItems: 0, subtotal: 0 });
+  }, [cart]);
+
+  // Update the Order Summary component with proper formatting
+  const OrderSummary = () => (
+    <Paper sx={{ p: 2 }}>
+      <Typography variant="h6" gutterBottom>Order Summary</Typography>
+      <Divider sx={{ mb: 2 }} />
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+        <Typography>Subtotal ({cartTotals.totalItems} items):</Typography>
+        <Typography fontWeight="bold">
+          Ksh {cartTotals.subtotal.toFixed(2)}
+        </Typography>
+      </Box>
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Typography>Shipping:</Typography>
+        <Typography>Calculated at checkout</Typography>
+      </Box>
+      
+      <Divider sx={{ mb: 2 }} />
+      
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+        <Typography variant="h6">Total:</Typography>
+        <Typography variant="h6" color="primary">
+          Ksh {cartTotals.subtotal.toFixed(2)}
+        </Typography>
+      </Box>
+      
+      <Button 
+        variant="contained" 
+        color="primary" 
+        fullWidth
+        size="large"
+        onClick={handleCheckoutClick}
+        disabled={cartTotals.totalItems === 0}
+      >
+        Proceed to Checkout
+      </Button>
+    </Paper>
+  );
 
   if (loading) {
     return (
@@ -152,69 +325,7 @@ const CartPage = () => {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {cart.items.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                        {item.product.feature_image && (
-                          <Box 
-                            component="img" 
-                            src={item.product.feature_image} 
-                            alt={item.product.name}
-                            sx={{ width: 60, height: 60, objectFit: 'cover', mr: 2 }}
-                          />
-                        )}
-                        <Typography>{item.product.name}</Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">
-                      Ksh {item.product.discount_price ?? item.product.price}
-                    </TableCell>
-                    <TableCell align="center">
-                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <IconButton 
-                          size="small" 
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity - 1, item.product.stock)}
-                          disabled={item.quantity <= 1}
-                        >
-                          <RemoveIcon />
-                        </IconButton>
-                        <TextField
-                          size="small"
-                          value={item.quantity}
-                          onChange={(e) => {
-                            const value = parseInt(e.target.value);
-                            if (!isNaN(value)) {
-                              handleUpdateQuantity(item.id, value, item.product.stock);
-                            }
-                          }}
-                          inputProps={{ 
-                              min: 1, 
-                              max: item.product.stock,
-                              style: { textAlign: 'center' } 
-                          }}
-                          sx={{ width: 60, mx: 1 }}
-                        />
-                        <IconButton 
-                          size="small"
-                          onClick={() => handleUpdateQuantity(item.id, item.quantity + 1, item.product.stock)}
-                          disabled={item.quantity >= item.product.stock}
-                        >
-                          <AddIcon />
-                        </IconButton>
-                      </Box>
-                    </TableCell>
-                    <TableCell align="right">Ksh {item.total_price}</TableCell>
-                    <TableCell align="center">
-                                        <IconButton 
-                                          color="error" 
-                                          onClick={() => handleRemoveItem(item.id)}
-                                        >
-                                          <DeleteIcon />
-                                        </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                {renderCartItems()}
               </TableBody>
             </Table>
           </TableContainer>
@@ -231,37 +342,7 @@ const CartPage = () => {
               </Button>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Paper sx={{ p: 2 }}>
-                <Typography variant="h6" gutterBottom>Order Summary</Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography>Subtotal ({cart.total_items} items):</Typography>
-                  <Typography fontWeight="bold">Ksh {cart.total_price}</Typography>
-                </Box>
-                
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                  <Typography>Shipping:</Typography>
-                  <Typography>Calculated at checkout</Typography>
-                </Box>
-                
-                <Divider sx={{ mb: 2 }} />
-                
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-                  <Typography variant="h6">Total:</Typography>
-                  <Typography variant="h6" color="primary">Ksh {cart.total_price}</Typography>
-                </Box>
-                
-                <Button 
-                  variant="contained" 
-                  color="primary" 
-                  fullWidth
-                  size="large"
-                  onClick={handleCheckout}
-                >
-                  Proceed to Checkout
-                </Button>
-              </Paper>
+              <OrderSummary />
             </Grid>
           </Grid>
         </>
