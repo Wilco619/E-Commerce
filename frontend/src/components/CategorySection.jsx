@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Grid, Paper } from '@mui/material';
+import { Box, Typography, Grid, Paper, useTheme } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import CategoryIcon from '@mui/icons-material/Category';
 import DevicesIcon from '@mui/icons-material/Devices';
@@ -25,8 +25,10 @@ const CategorySection = ({ categories = [], isSmallScreen }) => {
     return CategoryIcon;
   };
 
+  const theme = useTheme();
+
   return (
-    <Box sx={{ mb: { xs: 4, md: 6 } }}>
+    <Box sx={{ mb: { xs: 4, md: 6 }, mt: { xs: 5, md: 7 } }}>
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
@@ -35,12 +37,22 @@ const CategorySection = ({ categories = [], isSmallScreen }) => {
         borderColor: 'primary.light',
         pb: 1
       }}>
-        <Typography 
-          variant={isSmallScreen ? "h5" : "h4"} 
-          component="h2" 
-          sx={{ fontWeight: 'bold' }}
+        <Typography
+          variant="h3"
+          sx={{
+            textDecoration: 'none',
+            color: 'inherit',
+            fontWeight: 600,
+            letterSpacing: 0.5,
+            display: 'flex',
+            alignItems: 'center',
+            fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' } // Adjust sizes
+          }}
         >
-          Shop by Category
+          Shop By
+          <Box component="span" sx={{ color: theme.palette.secondary.main }}>
+            Category
+          </Box>
         </Typography>
       </Box>
 

@@ -95,7 +95,7 @@ const OrderRow = ({ order, isEvenRow }) => {
           #{order.id}
         </TableCell>
         <TableCell>{new Date(order.created_at).toLocaleDateString()}</TableCell>
-        <TableCell align="right" sx={{ fontWeight: 'medium' }}>${order.order_total}</TableCell>
+        <TableCell align="right" sx={{ fontWeight: 'medium' }}>Ksh{order.order_total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
         <TableCell align="center">
           <Chip 
             label={order.order_status.replace('_', ' ')} 
@@ -192,15 +192,15 @@ const OrderRow = ({ order, isEvenRow }) => {
                     {order.items.map((item, index) => (
                       <TableRow key={item.id} sx={{ backgroundColor: index % 2 === 0 ? 'rgba(0, 0, 0, 0.01)' : 'inherit' }}>
                         <TableCell>{item.product_name}</TableCell>
-                        <TableCell align="right">${item.price}</TableCell>
+                        <TableCell align="right">Ksh{item.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                         <TableCell align="center">{item.quantity}</TableCell>
-                        <TableCell align="right">${item.total}</TableCell>
+                        <TableCell align="right">Ksh{item.total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow sx={{ backgroundColor: 'rgba(0, 0, 0, 0.02)' }}>
                       <TableCell colSpan={3} align="right" sx={{ fontWeight: 'bold' }}>Order Total</TableCell>
                       <TableCell align="right" sx={{ fontWeight: 'bold', color: theme.palette.primary.main }}>
-                        ${order.order_total}
+                        Ksh{order.order_total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                       </TableCell>
                     </TableRow>
                   </TableBody>

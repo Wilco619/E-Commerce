@@ -3,9 +3,16 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper, Stack, AlertTitle } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import { authAPI } from '../services/api';
+import { useAuth } from '../authentication/AuthContext';
+import { useCart } from '../authentication/CartContext';
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from '../services/constants';
 
+
 const OTPVerification = () => {
+
+  const { refreshUserProfile } = useAuth();
+  const { refreshCart } = useCart();
+
   const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -42,6 +49,10 @@ const OTPVerification = () => {
         localStorage.removeItem(GUEST_SESSION_ID);
       }
 
+      // Add these lines to refresh data across the app
+      refreshUserProfile(); // Refresh the user profile data
+      refreshCart();        // Refresh the cart data
+      
       setSuccess(true);
       setTimeout(() => {
         navigate('/');

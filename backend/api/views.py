@@ -4,6 +4,12 @@ import random
 import uuid
 from datetime import timedelta
 
+from rest_framework import viewsets, status
+from rest_framework.decorators import action, permission_classes
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.response import Response
+from .permissions import CartPermission
+
 # Django imports
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -40,13 +46,13 @@ from django_filters import rest_framework as django_filters
 from .permissions import IsAdminOrReadOnly
 from .utils import send_newsletter_confirmation, send_otp_email
 from .models import (Category, Product, Cart, CartItem, Order, OrderItem,
-    ProductImage, GuestCart, GuestCartItem
+    ProductImage
 )
 from .serializers import (
     OTPSerializer, PasswordChangeSerializer, UserLoginSerializer,
     UserRegistrationSerializer, UserProfileSerializer, CategorySerializer,
     ProductListSerializer, ProductDetailSerializer, CartSerializer,
-    OrderSerializer, CheckoutSerializer, GuestCartSerializer,
+    OrderSerializer, CheckoutSerializer,
     NewsletterSubscriberSerializer
 )
 
@@ -64,7 +70,7 @@ class UserRegistrationView(GenericAPIView):
         session_id = request.session.session_key
         if (session_id):
             try:
-                guest_cart = GuestCart.objects.get(session_id=session_id)
+                guest_cart = Cart.objects.get(session_id=session_id)
                 user_cart, created = Cart.objects.get_or_create(user=user)
 
                 # Migrate items from guest cart to user cart
@@ -80,7 +86,7 @@ class UserRegistrationView(GenericAPIView):
 
                 # Delete the guest cart
                 guest_cart.delete()
-            except GuestCart.DoesNotExist:
+            except Cart.DoesNotExist:
                 pass
     
     def post(self, request, *args, **kwargs):
@@ -173,113 +179,65 @@ class VerifyOTPView(GenericAPIView):
     permission_classes = (AllowAny,)
     serializer_class = OTPSerializer
 
-    def migrate_guest_cart(self, user_session_id, user):
-        """Migrate guest cart items to user cart and cleanup"""
+    def migrate_cart(self, user_session_id, user):
+        """Migrate guest cart to authenticated user cart"""
         try:
             with transaction.atomic():
-                # Get guest cart with all related items
-                guest_cart = GuestCart.objects.filter(
-                    user_session_id=user_session_id
-                ).prefetch_related(
-                    'items',
-                    'items__product'
+                guest_cart = Cart.objects.filter(
+                    session_id=user_session_id,
+                    cart_type='guest'
                 ).first()
 
                 if not guest_cart:
-                    logger.info(f"No guest cart found for session {user_session_id}")
-                    return False
+                    return True
 
-                # Get or create authenticated user cart
-                user_cart, created = Cart.objects.get_or_create(
+                user_cart, _ = Cart.objects.get_or_create(
                     user=user,
                     cart_type='authenticated',
                     defaults={'session_id': None}
                 )
 
-                if created:
-                    logger.info(f"Created new cart for user {user.id}")
-                else:
-                    logger.info(f"Using existing cart for user {user.id}")
+                for item in guest_cart.items.all():
+                    cart_item, created = CartItem.objects.get_or_create(
+                        cart=user_cart,
+                        product=item.product,
+                        defaults={'quantity': item.quantity}
+                    )
+                    if not created:
+                        cart_item.quantity += item.quantity
+                        cart_item.save()
 
-                # Migrate items with stock validation
-                for guest_item in guest_cart.items.all():
-                    if guest_item.product.stock >= guest_item.quantity:
-                        cart_item, created = CartItem.objects.get_or_create(
-                            cart=user_cart,
-                            product=guest_item.product,
-                            defaults={'quantity': guest_item.quantity}
-                        )
-                        if not created:
-                            cart_item.quantity += guest_item.quantity
-                            cart_item.save()
-                        logger.info(f"Migrated {guest_item.quantity} units of product {guest_item.product.id}")
-                    else:
-                        logger.warning(f"Insufficient stock for product {guest_item.product.id}")
-
-                # Delete guest cart and its session
                 guest_cart.delete()
-                logger.info(f"Deleted guest cart {user_session_id}")
                 return True
 
         except Exception as e:
-            logger.error(f"Cart migration error: {str(e)}", exc_info=True)
+            logger.error(f"Cart migration error: {str(e)}")
             return False
 
-    def post(self, request, *args, **kwargs):
+    def post(self, request):
         serializer = self.get_serializer(data=request.data)
-
         if serializer.is_valid():
-            try:
-                user_id = serializer.validated_data.get('user_id')
-                user = CustomUser.objects.get(id=user_id)
-                user_session_id = request.data.get('user_session_id')
+            user_id = serializer.validated_data.get('user_id')
+            user = CustomUser.objects.get(id=user_id)
+            
+            # Verify OTP and generate tokens
+            refresh = RefreshToken.for_user(user)
+            tokens = {
+                'refresh': str(refresh),
+                'access': str(refresh.access_token)
+            }
 
-                # Clear OTP fields after successful verification
-                user.otp = None
-                user.otp_generated_at = None
-                user.save()
+            # Migrate cart if session ID exists
+            user_session_id = request.data.get('user_session_id')
+            cart_migrated = self.migrate_cart(user_session_id, user) if user_session_id else False
 
-                # Generate tokens
-                refresh = RefreshToken.for_user(user)
-                tokens = {
-                    'refresh': str(refresh),
-                    'access': str(refresh.access_token)
-                }
-
-                # Migrate cart if session ID exists
-                cart_migrated = False
-                cart_error = None
-                if user_session_id:
-                    cart_migrated = self.migrate_guest_cart(user_session_id, user)
-                    if not cart_migrated:
-                        cart_error = "Failed to migrate cart items"
-
-                response_data = {
-                    **tokens,
-                    'cart_migrated': cart_migrated,
-                    'user_id': user.id,
-                    'user_type': user.user_type
-                }
-
-                if cart_error:
-                    response_data['cart_error'] = cart_error
-
-                return Response(response_data, status=status.HTTP_200_OK)
-
-            except CustomUser.DoesNotExist:
-                return Response(
-                    {'error': 'User not found'}, 
-                    status=status.HTTP_404_NOT_FOUND
-                )
-            except Exception as e:
-                logger.error(f"OTP verification error: {str(e)}", exc_info=True)
-                return Response(
-                    {'error': 'Verification failed'}, 
-                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
-                )
+            return Response({
+                **tokens,
+                'cart_migrated': cart_migrated,
+                'user_id': user.id
+            })
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        
 
 class UserLogOutAPIView(APIView):
     permission_classes = (IsAuthenticated,)
@@ -619,134 +577,69 @@ class CartViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         """
-        Instantiates and returns the list of permissions that this view requires.
+        Set custom permissions:
+        - Allow anonymous access for guest cart operations
+        - Require authentication for user cart operations
         """
-        if self.action in ['guest_cart', 'create_guest_cart', 'add_guest_item', 
-                          'remove_guest_item', 'update_guest_item', 'clear_guest_cart']:
-            permission_classes = [AllowAny]
-        else:
-            permission_classes = [IsAuthenticated]
-        return [permission() for permission in permission_classes]
+        if self.action in ['current', 'add_item', 'update_item', 'remove_item', 'clear_cart', 'migrate_cart']:
+            return [AllowAny()]
+        return [IsAuthenticated()]
 
-    def get_queryset(self):
-        if self.action in ['guest_cart', 'create_guest_cart']:
-            return Cart.objects.all()  # Will be filtered in the action
-        return Cart.objects.filter(user=self.request.user)
-
-    @action(detail=False, methods=['get'])
-    def guest_cart(self, request):
-        """Get guest cart if it exists and is not expired"""
-        user_session_id = request.query_params.get('user_session_id')
-        
-        if not user_session_id:
-            return Response(
-                {"error": "Missing user_session_id"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
+    def current(self, request):
+        """Get current cart based on authentication status"""
         try:
-            cart = GuestCart.objects.filter(
-                user_session_id=user_session_id,
-            ).prefetch_related(
-                'items',
-                'items__product',
-                'items__product__images'
-            ).first()
-
-            if not cart:
-                cart = GuestCart.objects.create(
-                    user_session_id=user_session_id,
-                    session_id=user_session_id
-                )
-
-            serializer = GuestCartSerializer(cart)
-            return Response(serializer.data)
-            
-        except Exception as e:
-            logger.error(f"Guest cart error: {str(e)}")
-            return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=False, methods=['post'])
-    def create_guest_cart(self, request):
-        session_id = request.data.get('user_session_id')
-        if not session_id:
-            return Response(
-                {"error": "user_session_id is required"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        # Check if cart already exists
-        cart = Cart.objects.filter(
-            session_id=session_id,
-            cart_type='guest'
-        ).first()
-
-        if cart:
+            cart = self._get_or_create_cart(request)
             serializer = self.get_serializer(cart)
             return Response(serializer.data)
-
-        # Create new cart
-        cart = Cart.objects.create(
-            session_id=session_id,
-            cart_type='guest'
-        )
-        
-        serializer = self.get_serializer(cart)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    def list(self, request):
-        """Get or create authenticated user's cart"""
-        if not request.user.is_authenticated:
+        except ValueError as e:
             return Response(
-                {"error": "Authentication required"}, 
-                status=status.HTTP_401_UNAUTHORIZED
+                {"error": str(e)},
+                status=status.HTTP_400_BAD_REQUEST
             )
-
-        try:
-            with transaction.atomic():
-                cart, created = Cart.objects.get_or_create(
-                    user=request.user,
-                    cart_type='authenticated',
-                    defaults={'session_id': None}
-                )
-
-            serializer = self.get_serializer(cart)
-            return Response(serializer.data)
-                
         except Exception as e:
-            logger.error(f"Error in cart list view: {str(e)}")
             return Response(
-                {"error": "Failed to fetch cart"}, 
+                {"error": str(e)},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-    @action(detail=True, methods=['post'])
-    def add_item(self, request, pk=None):
+    def _get_or_create_cart(self, request):
+        """Helper method to get or create appropriate cart"""
         try:
-            cart = self.get_object()
+            if request.user.is_authenticated:
+                cart, _ = Cart.objects.get_or_create(
+                    user=request.user,
+                    cart_type='authenticated'
+                )
+            else:
+                session_id = request.query_params.get('user_session_id') or request.data.get('user_session_id')
+                if not session_id:
+                    raise ValueError("Session ID required for guest cart")
+                cart, _ = Cart.objects.get_or_create(
+                    session_id=session_id,
+                    cart_type='guest',
+                    defaults={'user': None}
+                )
+            return cart
+        except Exception as e:
+            logger.error(f"Error in _get_or_create_cart: {str(e)}")
+            raise
+
+    @action(detail=False, methods=['post'])
+    def add_item(self, request):
+        """Add item to current cart"""
+        try:
+            cart = self._get_or_create_cart(request)
             product_id = request.data.get('product_id')
             quantity = int(request.data.get('quantity', 1))
 
-            # Validate product
-            try:
-                product = Product.objects.get(id=product_id)
-            except Product.DoesNotExist:
-                return Response(
-                    {'error': 'Product not found'},
-                    status=status.HTTP_404_NOT_FOUND
-                )
-
-            # Check stock
+            product = Product.objects.get(id=product_id)
             if not product.is_available or product.stock < quantity:
                 return Response(
                     {'error': 'Product is out of stock or unavailable'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Add or update cart item
             cart_item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 product=product,
@@ -757,322 +650,164 @@ class CartViewSet(viewsets.ModelViewSet):
                 cart_item.quantity += quantity
                 cart_item.save()
 
-            serializer = self.get_serializer(cart)
-            return Response(serializer.data)
-
-        except Cart.DoesNotExist:
-            return Response(
-                {'error': 'Cart not found'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-        except Exception as e:
-            return Response(
-                {'error': str(e)},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=True, methods=['post'])
-    def update_item(self, request, pk=None):
-        cart = self.get_object()
-        cart_item_id = request.data.get('cart_item_id')
-        quantity = int(request.data.get('quantity', 1))
-        
-        try:
-            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
-            product = cart_item.product
-            
-            # Check if product is in stock
-            if not product.is_in_stock:
-                return Response(
-                    {'error': 'Product is out of stock'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            # Check if there's sufficient stock
-            if not product.has_sufficient_stock(quantity):
-                return Response(
-                    {'error': f'Only {product.stock} items available'}, 
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            cart_item.quantity = quantity
-            cart_item.save()
-            
             cart.refresh_from_db()
             serializer = self.get_serializer(cart)
             return Response(serializer.data)
-            
-        except CartItem.DoesNotExist:
-            return Response(
-                {'error': 'Cart item not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-    @action(detail=True, methods=['post'])
-    def remove_item(self, request, pk=None):
-        cart = self.get_object()
-        cart_item_id = request.data.get('cart_item_id')
-        
-        try:
-            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
-            cart_item.delete()
-            
-            cart.refresh_from_db()
-            serializer = self.get_serializer(cart)
-            return Response(serializer.data)
-            
-        except CartItem.DoesNotExist:
-            return Response({'error': 'Cart item not found'}, status=status.HTTP_404_NOT_FOUND)
-
-    @action(detail=True, methods=['post'])
-    def clear(self, request, pk=None):
-        cart = self.get_object()
-        cart.items.all().delete()
-        
-        cart.refresh_from_db()
-        serializer = self.get_serializer(cart)
-        return Response(serializer.data)
-
-    @action(detail=False, methods=['post'])
-    def migrate_cart(self, request):
-        user_session_id = request.data.get('user_session_id')
-        
-        if not user_session_id or not request.user.is_authenticated:
-            return Response(
-                {'error': 'Invalid request'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            guest_cart = GuestCart.objects.get(user_session_id=user_session_id)
-            user_cart, _ = Cart.objects.get_or_create(user=request.user)
-
-            # Migrate items
-            for guest_item in guest_cart.items.all():
-                cart_item, created = CartItem.objects.get_or_create(
-                    cart=user_cart,
-                    product=guest_item.product,
-                    defaults={'quantity': guest_item.quantity}
-                )
-                if not created:
-                    cart_item.quantity += guest_item.quantity
-                    cart_item.save()
-
-            # Delete guest cart after migration
-            guest_cart.delete()
-
-            serializer = self.get_serializer(user_cart)
-            return Response(serializer.data)
-
-        except GuestCart.DoesNotExist:
-            return Response(
-                {'message': 'No guest cart found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
-
-    @action(detail=False, methods=['post'])
-    def add_guest_item(self, request):
-        user_session_id = request.data.get('user_session_id')
-        product_id = request.data.get('product_id')
-        quantity = request.data.get('quantity', 1)
-
-        if not user_session_id or not product_id:
-            return Response(
-                {'error': 'Missing required fields'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        try:
-            # Get or create guest cart
-            guest_cart, created = GuestCart.objects.get_or_create(
-                user_session_id=user_session_id,
-                defaults={'session_id': user_session_id}
-            )
-
-            product = Product.objects.get(id=product_id)
-            cart_item, created = GuestCartItem.objects.get_or_create(
-                cart=guest_cart,
-                product=product,
-                defaults={'quantity': quantity}
-            )
-
-            if not created:
-                cart_item.quantity += quantity
-                cart_item.save()
-
-            serializer = GuestCartSerializer(guest_cart)
-            return Response(serializer.data)
-
-        except Product.DoesNotExist:
-            return Response(
-                {'error': 'Product not found'}, 
-                status=status.HTTP_404_NOT_FOUND
-            )
         except Exception as e:
             return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=False, methods=['get'])
-    def guest_cart(self, request):
-        """Get guest cart if it exists and is not expired"""
-        user_session_id = request.query_params.get('user_session_id')
-        
-        if not user_session_id:
+    def get_cart(self, request):
+        """Get current cart based on authentication status"""
+        try:
+            cart = self._get_or_create_cart(request)
+            serializer = self.get_serializer(cart)
+            return Response(serializer.data)
+        except ValueError as e:
             return Response(
-                {"error": "Missing user_session_id"}, 
+                {"error": str(e)},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        try:
-            # Clean up expired carts first
-            GuestCart.cleanup_expired_carts()
-
-            # Try to get existing cart
-            cart = GuestCart.objects.filter(
-                user_session_id=user_session_id,
-                expires_at__gt=timezone.now()
-            ).first()
-
-            if not cart:
-                # Create new cart if none exists
-                cart = GuestCart.objects.create(
-                    user_session_id=user_session_id,
-                    session_id=user_session_id
-                )
-
-            serializer = GuestCartSerializer(cart)
-            return Response(serializer.data)
-            
         except Exception as e:
-            logger.error(f"Guest cart error: {str(e)}")
             return Response(
-                {'error': str(e)}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-    @action(detail=False, methods=['get'], permission_classes=[AllowAny])
-    def get_guest_cart(self, request):
-        user_session_id = request.query_params.get('user_session_id')
-        if not user_session_id:
-            return Response(
-                {'error': 'user_session_id is required'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        try:
-            guest_cart = GuestCart.objects.prefetch_related(
-                'items',
-                'items__product',
-                'items__product__images'
-            ).get(user_session_id=user_session_id)
-            
-            serializer = GuestCartSerializer(guest_cart)
-            return Response(serializer.data)
-        except GuestCart.DoesNotExist:
-            return Response(
-                {'message': 'Guest cart not found'}, 
-                status=status.HTTP_404_NOT_FOUND
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
     @action(detail=False, methods=['post'])
-    def create_guest_cart(self, request):
-        session_id = request.data.get('user_session_id')
-        if not session_id:
-            return Response({'error': 'Session ID is required'}, status=status.HTTP_400_BAD_REQUEST)
-            
-        cart = GuestCart.objects.create(session_id=session_id)
-        serializer = GuestCartSerializer(cart)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    @action(detail=False, methods=['post'])
-    def update_guest_item(self, request):
-        user_session_id = request.data.get('user_session_id')
-        cart_item_id = request.data.get('cart_item_id')
-        quantity = int(request.data.get('quantity', 1))
-
-        if not user_session_id or not cart_item_id:
-            return Response(
-                {'error': 'Missing required fields'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+    def update_item(self, request):
+        """Update cart item quantity"""
         try:
-            cart_item = GuestCartItem.objects.select_related('product').get(
-                id=cart_item_id,
-                cart__user_session_id=user_session_id
-            )
+            cart = self._get_or_create_cart(request)
+            cart_item_id = request.data.get('cart_item_id')
+            quantity = int(request.data.get('quantity', 1))
 
-            if quantity > cart_item.product.stock:
+            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
+            
+            if not cart_item.product.has_sufficient_stock(quantity):
                 return Response(
-                    {'error': f'Only {cart_item.product.stock} items available'}, 
+                    {'error': f'Only {cart_item.product.stock} items available'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
             cart_item.quantity = quantity
             cart_item.save()
-
-            cart = cart_item.cart
-            serializer = GuestCartSerializer(cart)
+            
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
             return Response(serializer.data)
 
-        except GuestCartItem.DoesNotExist:
+        except CartItem.DoesNotExist:
             return Response(
-                {'error': 'Cart item not found'}, 
+                {'error': 'Cart item not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
     @action(detail=False, methods=['post'])
-    def remove_guest_item(self, request):
-        user_session_id = request.data.get('user_session_id')
-        cart_item_id = request.data.get('cart_item_id')
-
-        if not user_session_id or not cart_item_id:
-            return Response(
-                {'error': 'Missing required fields'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+    def remove_item(self, request):
+        """Remove item from cart"""
         try:
-            cart_item = GuestCartItem.objects.get(
-                id=cart_item_id,
-                cart__user_session_id=user_session_id
-            )
-            cart = cart_item.cart
+            cart = self._get_or_create_cart(request)
+            cart_item_id = request.data.get('cart_item_id')
+            
+            cart_item = CartItem.objects.get(id=cart_item_id, cart=cart)
             cart_item.delete()
-
-            serializer = GuestCartSerializer(cart)
+            
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
             return Response(serializer.data)
 
-        except GuestCartItem.DoesNotExist:
+        except CartItem.DoesNotExist:
             return Response(
-                {'error': 'Cart item not found'}, 
+                {'error': 'Cart item not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
-    @action(detail=False, methods=['post'])
-    def clear_guest_cart(self, request):
-        user_session_id = request.data.get('user_session_id')
-
-        if not user_session_id:
-            return Response(
-                {'error': 'Missing user_session_id'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
+    @action(detail=False, methods=['post'], url_path='clear')
+    def clear_cart(self, request):
+        """Clear all items from cart"""
         try:
-            cart = GuestCart.objects.get(user_session_id=user_session_id)
+            cart = self._get_or_create_cart(request)
             cart.items.all().delete()
             
-            serializer = GuestCartSerializer(cart)
+            cart.refresh_from_db()
+            serializer = self.get_serializer(cart)
             return Response(serializer.data)
-
-        except GuestCart.DoesNotExist:
+        except Exception as e:
+            logger.error(f"Error clearing cart: {str(e)}")
             return Response(
-                {'error': 'Cart not found'}, 
-                status=status.HTTP_404_NOT_FOUND
+                {"error": str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+    
+    @action(detail=False, methods=['post'], url_path='migrate')
+    def migrate_cart(self, request):
+        """Migrate guest cart to authenticated user cart"""
+        try:
+            if not request.user.is_authenticated:
+                return Response(
+                    {"error": "Authentication required"},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            session_id = request.data.get('user_session_id')
+            if not session_id:
+                return Response(
+                    {"error": "Session ID required"},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            with transaction.atomic():
+                # Get guest cart
+                guest_cart = Cart.objects.filter(
+                    session_id=session_id,
+                    cart_type='guest'
+                ).first()
+
+                if not guest_cart:
+                    return Response({
+                        "message": "No guest cart found",
+                        "cart_migrated": False
+                    })
+
+                # Get or create user cart
+                user_cart, _ = Cart.objects.get_or_create(
+                    user=request.user,
+                    cart_type='authenticated',
+                    defaults={'session_id': None}
+                )
+
+                # Transfer items
+                for item in guest_cart.items.all():
+                    cart_item, created = CartItem.objects.get_or_create(
+                        cart=user_cart,
+                        product=item.product,
+                        defaults={'quantity': item.quantity}
+                    )
+                    if not created:
+                        cart_item.quantity += item.quantity
+                        cart_item.save()
+
+                # Delete guest cart
+                guest_cart.delete()
+
+                serializer = self.get_serializer(user_cart)
+                return Response({
+                    "message": "Cart migrated successfully",
+                    "cart_migrated": True,
+                    "cart": serializer.data
+                })
+
+        except Exception as e:
+            logger.error(f"Cart migration error: {str(e)}")
+            return Response({
+                "error": str(e),
+                "cart_migrated": False
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = Order.objects.all()
@@ -1321,56 +1056,6 @@ class ForgotPasswordView(GenericAPIView):
                 'error': 'Failed to send password reset email'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class ResetPasswordView(GenericAPIView):
-    permission_classes = [AllowAny]
-
-    def post(self, request):
-        uid = request.data.get('uid')
-        token = request.data.get('token')
-        new_password = request.data.get('new_password')
-        
-        if not all([uid, token, new_password]):
-            return Response({
-                'error': 'Missing required fields'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            # Decode the user ID
-            user_id = force_str(urlsafe_base64_decode(uid))
-            user = CustomUser.objects.get(pk=user_id)
-            
-            # Verify the token
-            if not default_token_generator.check_token(user, token):
-                return Response({
-                    'error': 'Invalid or expired password reset token'
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Validate the new password
-            try:
-                validate_password(new_password, user)
-            except ValidationError as e:
-                return Response({
-                    'error': e.messages
-                }, status=status.HTTP_400_BAD_REQUEST)
-            
-            # Set the new password
-            user.set_password(new_password)
-            user.save()
-            
-            return Response({
-                'message': 'Password has been reset successfully'
-            }, status=status.HTTP_200_OK)
-            
-        except (TypeError, ValueError, CustomUser.DoesNotExist):
-            return Response({
-                'error': 'Invalid password reset link'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            logger.error(f"Password reset error: {str(e)}")
-            return Response({
-                'error': 'Failed to reset password'
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 class LogoutView(APIView):
     permission_classes = (AllowAny,)
 
@@ -1395,7 +1080,7 @@ class LogoutView(APIView):
             new_session_id = self.create_guest_session()
             expires_at = timezone.now() + timedelta(hours=24)
             
-            guest_cart = GuestCart.objects.create(
+            guest_cart = Cart.objects.create(
                 user_session_id=new_session_id,
                 session_id=new_session_id,
                 expires_at=expires_at
@@ -1417,3 +1102,93 @@ class LogoutView(APIView):
                 {"error": "Failed to logout"}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+
+# views.py
+from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
+import json
+
+@ensure_csrf_cookie
+def set_csrf_token(request):
+    """
+    This view does nothing but ensure that the CSRF cookie is set.
+    This is useful for the React app to have the CSRF token.
+    """
+    return JsonResponse({'message': 'CSRF cookie set'})
+
+@require_POST
+def set_user_preferences(request):
+    """
+    Set user preferences in cookies.
+    Expects a JSON body with preference key-value pairs.
+    """
+    try:
+        data = json.loads(request.body)
+        preferences = data.get('preferences', {})
+        
+        response = JsonResponse({'status': 'success', 'message': 'Preferences saved'})
+        
+        # Set each preference as a cookie
+        for key, value in preferences.items():
+            response.set_cookie(
+                key=f'pref_{key}',
+                value=value,
+                max_age=31536000,  # 1 year in seconds
+                httponly=False,  # Allow JavaScript access
+                secure=request.is_secure(),  # Only secure in production
+                samesite='Lax'
+            )
+        
+        return response
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+@require_POST
+def set_user_session(request):
+    """
+    Set session data for authenticated users.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({'status': 'error', 'message': 'Not authenticated'}, status=401)
+    
+    try:
+        data = json.loads(request.body)
+        
+        # Store data in session
+        for key, value in data.items():
+            request.session[key] = value
+        
+        return JsonResponse({'status': 'success', 'message': 'Session updated'})
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'error', 'message': 'Invalid JSON'}, status=400)
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+def get_user_preferences(request):
+    """
+    Get all user preferences from cookies.
+    """
+    preferences = {}
+    
+    for key in request.COOKIES:
+        if key.startswith('pref_'):
+            clean_key = key[5:]  # Remove 'pref_' prefix
+            preferences[clean_key] = request.COOKIES[key]
+    
+    return JsonResponse({'preferences': preferences})
+
+def delete_user_preference(request, preference_key):
+    """
+    Delete a specific user preference cookie.
+    """
+    response = JsonResponse({'status': 'success', 'message': f'Preference {preference_key} deleted'})
+    
+    cookie_key = f'pref_{preference_key}'
+    if cookie_key in request.COOKIES:
+        response.delete_cookie(cookie_key)
+    
+    return response

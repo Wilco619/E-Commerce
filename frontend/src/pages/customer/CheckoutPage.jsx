@@ -14,6 +14,7 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
+import { useSnackbar } from 'notistack';
 import ShippingForm from './ShippingForm';
 import PaymentForm from './PaymentForm';
 import OrderSummary from './OrderSummary';
@@ -25,12 +26,14 @@ const steps = ['Shipping Information', 'Payment Method', 'Review Order'];
 
 const CheckoutPage = () => {
   const navigate = useNavigate();
+  const { enqueueSnackbar } = useSnackbar();
   const [activeStep, setActiveStep] = useState(0);
   const [cart, setCart] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(false);
   const [orderId, setOrderId] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
   
   // M-Pesa specific states
   const [mpesaDialogOpen, setMpesaDialogOpen] = useState(false);
@@ -59,43 +62,48 @@ const CheckoutPage = () => {
       try {
         setLoading(true);
         const [cartResponse, profileResponse] = await Promise.all([
-          cartAPI.getCart(),
+          cartAPI.getCurrentCart(),
           authAPI.getCurrentUser()
         ]);
 
-        // Handle different cart response structures
-        const cartData = cartResponse.data;
-        if (Array.isArray(cartData.results)) {
-          // If response has results array, take the first cart
-          setCart(cartData.results[0]);
-        } else if (Array.isArray(cartData)) {
-          // If response is direct array
-          setCart(cartData[0]);
-        } else {
-          // If response is a single cart object
-          setCart(cartData);
+        setCart(cartResponse.data);
+        setUserProfile(profileResponse.data);
+
+        // Prefill form with user profile data
+        if (profileResponse.data) {
+          // Combine first_name and last_name into full_name
+          const fullName = `${profileResponse.data.first_name || ''} ${profileResponse.data.last_name || ''}`.trim();
+          
+          setFormData(prevData => ({
+            ...prevData,
+            full_name: fullName || '',
+            email: profileResponse.data.email || '',
+            phone_number: profileResponse.data.phone_number || '',
+            address: profileResponse.data.address || '',
+            city: profileResponse.data.city || '',
+            postal_code: profileResponse.data.postal_code || '',
+            country: profileResponse.data.country || '',
+            delivery_location: profileResponse.data.delivery_location || '',
+          }));
         }
 
-        const profileData = profileResponse.data;
-        setFormData((prevFormData) => ({
-          ...prevFormData,
-          full_name: profileData.first_name && profileData.last_name 
-            ? `${profileData.first_name} ${profileData.last_name}`
-            : '',
-          email: profileData.email || '',
-          phone_number: profileData.phone_number || '',
-          address: profileData.address || ''
-        }));
-      } catch (err) {
-        setError('Failed to load your cart or profile information. Please try again.');
-        console.error('Error fetching cart or profile:', err);
+      } catch (error) {
+        console.error('Error fetching cart or profile:', error);
+        setError('Failed to load checkout data');
+        enqueueSnackbar('Error loading checkout data', { variant: 'error' });
       } finally {
         setLoading(false);
       }
     };
 
     fetchCartAndProfile();
-  }, []);
+  }, [enqueueSnackbar]);
+
+  // Add a debug effect to monitor data loading
+  useEffect(() => {
+    console.log('User Profile:', userProfile);
+    console.log('Form Data:', formData);
+  }, [userProfile, formData]);
 
   const handleFormChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -197,7 +205,7 @@ const CheckoutPage = () => {
       
       const mpesaPaymentData = {
         phone_number: phoneNumber,
-        amount: orderTotal.toFixed(2) // Ensure amount is properly formatted
+        amount: orderTotal.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") // Ensure amount is properly formatted
       };
       
       const response = await orderAPI.initiateMpesaPayment(mpesaPaymentData);
@@ -300,53 +308,62 @@ const CheckoutPage = () => {
   const handlePlaceOrder = async (mpesaCheckoutId = null) => {
     try {
       setLoading(true);
-      
+
+      // Validate delivery method
+      if (!formData.is_pickup && !formData.delivery_location) {
+        enqueueSnackbar('Please select a delivery location or choose pickup option', {
+          variant: 'error'
+        });
+        return;
+      }
+
       // Calculate totals
       const subtotal = cart.items.reduce((total, item) => {
         const itemPrice = parseFloat(item.product.discount_price || item.product.price);
         return total + (itemPrice * item.quantity);
       }, 0);
-      
-      const orderTotal = subtotal + parseFloat(formData.delivery_fee || 0);
-      
+
+      const deliveryFee = formData.is_pickup ? 0 : findDeliveryFee(formData.delivery_location);
+      const orderTotal = subtotal + deliveryFee;
+
       const orderData = {
         ...formData,
         cart_id: cart.id,
         subtotal: subtotal.toFixed(2),
-        delivery_fee: parseFloat(formData.delivery_fee || 0).toFixed(2),
+        delivery_fee: deliveryFee.toFixed(2),
         order_total: orderTotal.toFixed(2),
-        phone_number: formData.phone_number,
+        delivery_location: formData.is_pickup ? 'KENCOM' : formData.delivery_location,
+        phone_number: formData.phone_number.replace(/\s+/g, ''), // Remove any whitespace
       };
-      
-      // If this is an M-Pesa payment, add the checkout ID
+
       if (mpesaCheckoutId) {
         orderData.mpesa_checkout_id = mpesaCheckoutId;
-        orderData.payment_status = 'COMPLETED';
-        setMpesaOrderPlaced(true);
+        orderData.payment_status = 'PENDING';
       }
-      
-      console.log('Placing order with data:', orderData);
+
+      console.log('Sending order data:', orderData);
       const response = await orderAPI.checkout(orderData);
       console.log('Order placed successfully:', response.data);
+      
+      // Handle success
       setOrderSuccess(true);
       setOrderId(response.data.id);
       
-      // If M-Pesa dialog is open, close it
       if (mpesaDialogOpen) {
         setMpesaDialogOpen(false);
       }
+
+      // Navigate to order confirmation
+      navigate(`/order/${response.data.id}`);
       
-      // Clear the form and navigate to order confirmation
-      setTimeout(() => {
-        navigate(`/order/${response.data.id}`);
-      }, 3000);
     } catch (err) {
-      console.error('Detailed error placing order:', err.response?.data || err);
-      setError('Failed to place your order. Please try again.');
-      console.error('Error placing order:', err);
+      console.error('Error placing order:', err.response?.data || err);
+      const errorMessage = err.response?.data?.delivery_location?.[0] || 
+                          err.response?.data?.detail ||
+                          'Failed to place order';
+      enqueueSnackbar(errorMessage, { variant: 'error' });
     } finally {
       setLoading(false);
-      setMpesaProcessing(false);
     }
   };
 
@@ -360,8 +377,8 @@ const CheckoutPage = () => {
       
       setCart(prevCart => ({
         ...prevCart,
-        subtotal: subtotal.toFixed(2),
-        total_price: (subtotal + parseFloat(formData.delivery_fee || 0)).toFixed(2)
+        subtotal: subtotal.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ","),
+        total_price: (subtotal + parseFloat(formData.delivery_fee || 0)).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")
       }));
     }
   }, [cart?.items, formData.delivery_fee]);

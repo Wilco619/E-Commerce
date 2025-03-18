@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate, Link as RouterLink, useLocation } from 'react-router-dom';
 import {
   Container,
@@ -33,6 +33,15 @@ const LoginPage = () => {
     email: '',
     password: ''
   });
+  const [message, setMessage] = useState(''); // Add this state
+
+  useEffect(() => {
+    // Check if user attempted checkout
+    const checkoutAttempted = sessionStorage.getItem('checkoutAttempted');
+    if (checkoutAttempted) {
+      setMessage('Please log in to complete your checkout');
+    }
+  }, []);
 
   // Get redirect path from location state or default to home
   const from = location.state?.from?.pathname || '/';
@@ -49,31 +58,25 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
-      const response = await authAPI.login({
+      const result = await login({
         username_or_email: formData.email,
         password: formData.password,
       });
 
-      if (response && response.data.user_id) {
-        // Store user_id in session storage for OTP verification
-        sessionStorage.setItem('user_id', response.data.user_id);
-        
-        // Show success message
-        enqueueSnackbar('Please verify your account with OTP sent to your email', { 
-          variant: 'success' 
-        });
-        
-        // Redirect to OTP verification page
-        navigate('/verify-otp');
+      if (result.success) {
+        if (result.requiresOTP) {
+          enqueueSnackbar('Please verify your account with OTP sent to your email', { 
+            variant: 'success' 
+          });
+          navigate('/verify-otp');
+        }
       } else {
-        throw new Error('Invalid response from server');
+        throw new Error(result.error);
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.response?.data?.error || err.response?.data?.detail || 'Failed to login. Please try again.');
-      enqueueSnackbar(err.response?.data?.error || 'Login failed', { 
-        variant: 'error' 
-      });
+      setError(err.message);
+      enqueueSnackbar(err.message, { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -177,6 +180,12 @@ const LoginPage = () => {
               </Alert>
             )}
             
+            {message && (
+              <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+                {message}
+              </Alert>
+            )}
+            
             <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
               <TextField
                 margin="normal"
@@ -266,16 +275,6 @@ const LoginPage = () => {
           </Box>
         </Box>
       </Paper>
-      <Box sx={{ mt: 2, textAlign: 'center' }}>
-        <Link
-          component={RouterLink}
-          to="/forgot-password"
-          variant="body2"
-          sx={{ textDecoration: 'none' }}
-        >
-          Forgot password?
-        </Link>
-      </Box>
     </Container>
   );
 };

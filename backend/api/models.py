@@ -180,6 +180,8 @@ class Cart(models.Model):
         ),
         default='guest'
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         constraints = [
@@ -194,6 +196,22 @@ class Cart(models.Model):
                 name='unique_guest_cart'
             )
         ]
+
+    @classmethod
+    def cleanup_expired_carts(cls):
+        """Clean up guest carts older than 24 hours"""
+        expiry_time = timezone.now() - timedelta(hours=24)
+        cls.objects.filter(
+            cart_type='guest',
+            created_at__lt=expiry_time
+        ).delete()
+
+    @property
+    def total(self):
+        return sum(item.total_price for item in self.items.all())
+
+    def __str__(self):
+        return f"Cart {'User: ' + self.user.username if self.user else 'Guest: ' + str(self.session_id)}"
 
     def save(self, *args, **kwargs):
         if self.user:
@@ -223,38 +241,6 @@ class CartItem(models.Model):
 def get_expiry_time():
     return timezone.now() + timedelta(hours=24)
 
-class GuestCart(models.Model):
-    user_session_id = models.CharField(max_length=100, unique=True)
-    session_id = models.CharField(max_length=100)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    expires_at = models.DateTimeField(default=timezone.now() + timezone.timedelta(hours=24))
-
-    @classmethod
-    def cleanup_expired_carts(cls):
-        """Delete expired guest carts"""
-        cls.objects.filter(expires_at__lt=timezone.now()).delete()
-
-    def is_expired(self):
-        return self.expires_at < timezone.now()
-
-    def __str__(self):
-        return f"Guest Cart {self.user_session_id}"
-
-    def save(self, *args, **kwargs):
-        # Update expiration time on each save
-        if self.pk:  # If cart already exists
-            self.expires_at = timezone.now() + timezone.timedelta(hours=24)
-        super().save(*args, **kwargs)
-
-class GuestCartItem(models.Model):
-    cart = models.ForeignKey(GuestCart, related_name='items', on_delete=models.CASCADE)
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    quantity = models.PositiveIntegerField(default=1)
-    added_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('cart', 'product')
 
 class Order(models.Model):
     ORDER_STATUS_CHOICES = (

@@ -267,7 +267,7 @@ const AdminOrders = () => {
                         <TableCell>#{order.id}</TableCell>
                         <TableCell>{order.full_name}</TableCell>
                         <TableCell>{moment(order.created_at).format('MMM D, YYYY')}</TableCell>
-                        <TableCell>${parseFloat(order.order_total).toFixed(2)}</TableCell>
+                        <TableCell>Ksh{parseFloat(order.order_total).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                         <TableCell>
                           <Chip 
                             label={order.order_status} 
@@ -344,14 +344,14 @@ const AdminOrders = () => {
                                     {order.items.map((item) => (
                                       <TableRow key={item.id}>
                                         <TableCell>{item.product_name}</TableCell>
-                                        <TableCell align="right">${parseFloat(item.price).toFixed(2)}</TableCell>
+                                        <TableCell align="right">Ksh{parseFloat(item.price).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                                         <TableCell align="right">{item.quantity}</TableCell>
-                                        <TableCell align="right">${parseFloat(item.total).toFixed(2)}</TableCell>
+                                        <TableCell align="right">Ksh{parseFloat(item.total).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                                       </TableRow>
                                     ))}
                                     <TableRow>
                                       <TableCell colSpan={3} align="right"><strong>Order Total:</strong></TableCell>
-                                      <TableCell align="right"><strong>${parseFloat(order.order_total).toFixed(2)}</strong></TableCell>
+                                      <TableCell align="right"><strong>Ksh{parseFloat(order.order_total).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</strong></TableCell>
                                     </TableRow>
                                   </TableBody>
                                 </Table>

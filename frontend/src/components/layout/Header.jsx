@@ -1,454 +1,682 @@
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link as RouterLink, useNavigate, useLocation } from 'react-router-dom';
-import {
-  AppBar, Toolbar, Typography, Button, IconButton, Badge,
-  Box, Menu, MenuItem, InputBase, Avatar, Drawer, List, ListItem,
-  ListItemText, ListItemIcon, Divider, useMediaQuery, Tooltip, CircularProgress
-} from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import {
-  ShoppingCart, Menu as MenuIcon, Person, Search,
-  Logout, Dashboard, Inventory, Category, Receipt,
-  AccountCircle, Home, Store, ShoppingBasket, Login, PersonAdd
-} from '@mui/icons-material';
-import { styled, alpha } from '@mui/material/styles';
 import { useAuth } from '../../authentication/AuthContext';
 import { useCart } from '../../authentication/CartContext';
+import { useSession } from '../../authentication/SessionContext';
+import { useSnackbar } from 'notistack';
+import { API } from "../../services/api";
+import { ACCESS_TOKEN } from '../../services/constants';
 
-// Styled components
-const SearchBox = styled('div')(({ theme }) => ({
-  position: 'relative',
-  borderRadius: theme.shape.borderRadius,
-  backgroundColor: alpha(theme.palette.common.white, 0.15),
-  '&:hover': {
-    backgroundColor: alpha(theme.palette.common.white, 0.25),
-  },
-  marginRight: theme.spacing(2),
-  marginLeft: 0,
-  width: '100%',
-  [theme.breakpoints.up('sm')]: {
-    marginLeft: theme.spacing(3),
-    width: 'auto',
-  },
-}));
+// MUI Components
+import {
+  AppBar,
+  Box,
+  Toolbar,
+  IconButton,
+  Typography,
+  Badge,
+  Menu,
+  MenuItem,
+  Avatar,
+  Button,
+  InputBase,
+  Drawer,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  useMediaQuery,
+  CircularProgress,
+  Tooltip,
+  Fade,
+  ListItemButton,
+  Skeleton,
+} from '@mui/material';
 
-const SearchIconWrapper = styled('div')(({ theme }) => ({
-  padding: theme.spacing(0, 2),
-  height: '100%',
-  position: 'absolute',
-  pointerEvents: 'none',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-}));
+// MUI Icons
+import {
+  Menu as MenuIcon,
+  Search as SearchIcon,
+  ShoppingCart as ShoppingCartIcon,
+  AccountCircle,
+  Close as CloseIcon,
+  Dashboard as DashboardIcon,
+  Person as PersonIcon,
+  Logout as LogoutIcon,
+  Login as LoginIcon,
+  Home as HomeIcon,
+  Store as StoreIcon,
+  Search as SearchOutlinedIcon,
+} from '@mui/icons-material';
 
-const StyledInputBase = styled(InputBase)(({ theme }) => ({
-  color: 'inherit',
-  '& .MuiInputBase-input': {
-    padding: theme.spacing(1, 1, 1, 0),
-    paddingLeft: `calc(1em + ${theme.spacing(4)})`,
-    transition: theme.transitions.create('width'),
-    width: '100%',
-    [theme.breakpoints.up('md')]: {
-      width: '20ch',
-    },
-  },
-}));
+// Theme
+import { useTheme } from '@mui/material/styles';
 
-const LogoText = styled(Typography)(({ theme }) => ({
-  textDecoration: 'none',
-  color: 'inherit',
-  display: 'flex',
-  alignItems: 'center',
-  fontWeight: 700,
-  marginRight: theme.spacing(2)
-}));
+const ModernHeader = ({ toggleTheme, isDarkMode }) => {
 
-const Header = () => {
-  const [authStateChangeTrigger, setAuthStateChangeTrigger] = useState(0);
+  const auth = useAuth();
 
-  // Event listener for authentication state changes
-  useEffect(() => {
-    const handleAuthStateChange = () => {
-      // Force a re-render by updating local state or triggering a state change
-      setAuthStateChangeTrigger(prev => prev + 1); // This will trigger a re-render
-    };
 
-    window.addEventListener('authStateChanged', handleAuthStateChange);
-    
-    // Cleanup the event listener on component unmount
-    return () => {
-      window.removeEventListener('authStateChanged', handleAuthStateChange);
-    };
-  }, []);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const { user, isAdmin, isAuthenticated, logout, loading: authLoading } = useAuth();
-  // This component will re-render when authStateVersion changes
+  const location = useLocation();
+  
+  const { logout } = useAuth();
+  const [user, setUser] = useState(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  const [loading, setLoading] = useState(true);
   const { cart, loading: cartLoading } = useCart();
+  const { sessionId } = useSession();
+  const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   
   // State
+  const [skeletonLoading, setSkeletonLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [userMenuAnchor, setUserMenuAnchor] = useState(null);
+  const [searchOpen, setSearchOpen] = useState(false);
   
-  // Memoized user initial
-  const userInitial = useMemo(() => {
-    return user?.username?.charAt(0)?.toUpperCase() || 'U';
-  }, [user?.username]);
+  
+  // Listen for auth state changes
+  useEffect(() => {
+    const checkLoggedInUser = async () => {
+      try {
+        const token = localStorage.getItem(ACCESS_TOKEN);
+        if (token) {
+          const config = {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          };
+          // Using the correct endpoint from your API
+          const response = await API.get("/profile/", config);
+          setUser(response.data);
+          setIsAuthenticated(true);
+          // Check for admin status based on your user data structure
+          setIsAdmin(response.data.is_admin || response.data.is_staff || false);
+        } else {
+          setUser(null);
+          setIsAuthenticated(false);
+          setIsAdmin(false);
+        }
+      } catch (error) {
+        console.error("Error fetching user data:", error);
+        setUser(null);
+        setIsAuthenticated(false);
+        setIsAdmin(false);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkLoggedInUser();
+  }, [auth.user]);
 
-  // Handlers
+  // Handle logout
+  const handleLogout = useCallback(async () => {
+    try {
+      setLoggingOut(true);
+      handleProfileMenuClose();
+      await logout();
+      enqueueSnackbar('Successfully logged out', { 
+        variant: 'success',
+        anchorOrigin: {
+          vertical: 'top',
+          horizontal: 'center',
+        },
+      });
+    } catch (error) {
+      enqueueSnackbar('Logout failed', { 
+        variant: 'error',
+        anchorOrigin: {
+          vertical: 'top',
+          horizontal: 'center',
+        },
+      });
+    } finally {
+      setLoggingOut(false);
+    }
+  }, [logout, enqueueSnackbar]);
+
+  useEffect(() => {
+    setSkeletonLoading(loading || cartLoading);
+  }, [loading, cartLoading]);
+
+  // Handle search
   const handleSearch = useCallback((e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/shop?search=${searchQuery}`);
+      navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
+      setSearchOpen(false);
     }
   }, [navigate, searchQuery]);
-  
-  const handleUserMenuOpen = useCallback((event) => {
-    setUserMenuAnchor(event.currentTarget);
-  }, []);
-  
-  const handleUserMenuClose = useCallback(() => {
-    setUserMenuAnchor(null);
-  }, []);
-  
-  const handleLogout = useCallback(() => {
-    logout();
-    setUserMenuAnchor(null);
-    navigate('/home');
-  }, [logout, navigate]);
-  
-  const toggleMobileMenu = useCallback(() => {
-    setMobileMenuOpen(prevState => !prevState);
-  }, []);
-  
-  const navigateAndCloseMenus = useCallback((path) => {
-    setUserMenuAnchor(null);
-    setMobileMenuOpen(false);
-    navigate(path);
-  }, [navigate]);
-
-  // Admin menu items memoized
-  const adminMenuItems = useMemo(() => (
-    <>
-      <MenuItem onClick={() => navigateAndCloseMenus('/admin')}>
-        <ListItemIcon>
-          <Dashboard fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Admin Dashboard" />
-      </MenuItem>
-      <Divider />
-      <MenuItem onClick={() => navigateAndCloseMenus('/admin/products/new')}>
-        <ListItemIcon>
-          <Inventory fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Manage Products" />
-      </MenuItem>
-      <MenuItem onClick={() => navigateAndCloseMenus('/admin/categories/new')}>
-        <ListItemIcon>
-          <Category fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Manage Categories" />
-      </MenuItem>
-      <MenuItem onClick={() => navigateAndCloseMenus('/admin/orders')}>
-        <ListItemIcon>
-          <Receipt fontSize="small" />
-        </ListItemIcon>
-        <ListItemText primary="Manage Orders" />
-      </MenuItem>
-    </>
-  ), [navigateAndCloseMenus]);
-
-  // Admin mobile menu items memoized
-  const adminMobileItems = useMemo(() => (
-    <>
-      <Divider />
-      <ListItem button onClick={() => navigateAndCloseMenus('/admin')}>
-        <ListItemIcon><Dashboard /></ListItemIcon>
-        <ListItemText primary="Admin Dashboard" />
-      </ListItem>
-      <ListItem button onClick={() => navigateAndCloseMenus('/admin/products/new')}>
-        <ListItemIcon><Inventory /></ListItemIcon>
-        <ListItemText primary="Manage Products" />
-      </ListItem>
-      <ListItem button onClick={() => navigateAndCloseMenus('/admin/categories/new')}>
-        <ListItemIcon><Category /></ListItemIcon>
-        <ListItemText primary="Manage Categories" />
-      </ListItem>
-      <ListItem button onClick={() => navigateAndCloseMenus('/admin/orders')}>
-        <ListItemIcon><Receipt /></ListItemIcon>
-        <ListItemText primary="Manage Orders" />
-      </ListItem>
-    </>
-  ), [navigateAndCloseMenus]);
 
   // Calculate cart items count
   const cartItemsCount = useMemo(() => {
-    if (cartLoading) return 0;
-    return cart?.items?.reduce((total, item) => total + item.quantity, 0) || 0;
+    if (!cart || cartLoading) return 0;
+    return cart.items?.reduce((total, item) => total + item.quantity, 0) || 0;
   }, [cart, cartLoading]);
 
-  // Handle cart click based on auth status
-  const handleCartClick = useCallback((e) => {
-    e.preventDefault();
-    if (!isAuthenticated && cartItemsCount > 0) {
-      // Store the current cart URL to redirect after login
-      sessionStorage.setItem('redirectAfterLogin', '/cart');
-      navigate('/login');
-    } else {
-      navigate('/cart');
-    }
-  }, [isAuthenticated, cartItemsCount, navigate]);
+  // Handle profile menu
+  const handleProfileMenuOpen = (event) => {
+    setProfileAnchorEl(event.currentTarget);
+  };
 
-  // Handle checkout redirect
-  const handleCheckoutClick = useCallback(() => {
-    if (!isAuthenticated) {
-      sessionStorage.setItem('redirectAfterLogin', '/checkout');
-      navigate('/login');
-    } else {
-      navigate('/checkout');
-    }
-  }, [isAuthenticated, navigate]);
+  const handleProfileMenuClose = () => {
+    setProfileAnchorEl(null);
+  };
+
+  // Handle mobile menu
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
+  // Navigation helper
+  const navigateTo = (path) => {
+    navigate(path);
+    setMobileMenuOpen(false);
+  };
+
+  // Toggle search bar
+  const toggleSearch = () => {
+    setSearchOpen(!searchOpen);
+  };
+
+  // Check if path is active
+  const isActive = (path) => {
+    return location.pathname === path;
+  };
+
+  // Render the search bar
+  const renderSearchBar = () => (
+    <Box 
+      component="form" 
+      onSubmit={handleSearch}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        backgroundColor: theme.palette.background.paper,
+        borderRadius: '20px',
+        padding: '4px 8px',
+        width: isMobile ? '100%' : '300px',
+        border: `1px solid ${theme.palette.divider}`,
+        boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+        transition: 'all 0.3s ease'
+      }}
+    >
+      <InputBase
+        placeholder="Search products..."
+        value={searchQuery}
+        onChange={(e) => setSearchQuery(e.target.value)}
+        sx={{
+          color: 'black',
+          flex: 1,
+          paddingLeft: 1
+        }}
+        autoFocus={isMobile}
+      />
+      <IconButton type="submit" sx={{ p: '8px' }} aria-label="search">
+        <SearchIcon />
+      </IconButton>
+      {isMobile && (
+        <IconButton sx={{ p: '8px' }} aria-label="close search" onClick={toggleSearch}>
+          <CloseIcon />
+        </IconButton>
+      )}
+    </Box>
+  );
+
+  // Render profile menu
+  const renderProfileMenu = (
+    <Menu
+      anchorEl={profileAnchorEl}
+      id="profile-menu"
+      keepMounted
+      open={Boolean(profileAnchorEl)}
+      onClose={handleProfileMenuClose}
+      transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+      anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      PaperProps={{
+        elevation: 3,
+        sx: {
+          borderRadius: 2,
+          minWidth: 180,
+          mt: 1
+        }
+      }}
+    >
+      <Box sx={{ p: 1, display: 'flex', alignItems: 'center', px: 2 }}>
+        <Avatar 
+          src={user?.profile_picture} 
+          sx={{ width: 32, height: 32, mr: 1.5 }}
+        />
+        <Box>
+          <Typography variant="subtitle2" noWrap>
+            {user?.first_name} {user?.last_name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {user?.email}
+          </Typography>
+        </Box>
+      </Box>
+      <Divider sx={{ my: 1 }} />
+      <MenuItem onClick={() => { handleProfileMenuClose(); navigate('/profile'); }}>
+        <ListItemIcon>
+          <PersonIcon fontSize="small" />
+        </ListItemIcon>
+        <ListItemText>Profile</ListItemText>
+      </MenuItem>
+      {isAdmin && !skeletonLoading && (
+        <MenuItem onClick={() => { handleProfileMenuClose(); navigate('/admin'); }}>
+          <ListItemIcon>
+            <DashboardIcon fontSize="small" />
+          </ListItemIcon>
+          <ListItemText>Admin Panel</ListItemText>
+        </MenuItem>
+      )}
+      <Divider sx={{ my: 1 }} />
+      <MenuItem onClick={handleLogout} disabled={loggingOut}>
+        <ListItemIcon>
+          {loggingOut ? (
+            <CircularProgress size={20} />
+          ) : (
+            <LogoutIcon fontSize="small" />
+          )}
+        </ListItemIcon>
+        <ListItemText>Logout</ListItemText>
+      </MenuItem>
+    </Menu>
+  );
+
+  // Render mobile drawer
+  const renderMobileDrawer = (
+    <Drawer
+      anchor="left"
+      open={mobileMenuOpen}
+      onClose={toggleMobileMenu}
+      PaperProps={{
+        sx: {
+          width: '75%',
+          maxWidth: 280,
+          borderTopRightRadius: 8,
+          borderBottomRightRadius: 8
+        }
+      }}
+    >
+      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Typography
+            variant="h6"
+            component={RouterLink}
+            to="/"
+            sx={{ 
+              textDecoration: 'none', 
+              color: 'inherit', 
+              fontWeight: 800, 
+              mb: 3, 
+              display: 'block',
+              letterSpacing: '0.5px'
+            }}
+          >
+            JEMSA<Box component="span" sx={{ color: theme.palette.secondary.main }}>TECHS</Box>
+        </Typography>
+        <IconButton onClick={toggleMobileMenu}>
+          <CloseIcon />
+        </IconButton>
+      </Box>
+      <Divider />
+      
+      {isAuthenticated && (
+      <Box sx={{ p: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          {skeletonLoading ? (
+            <>
+              <Skeleton variant="circular" width={40} height={40} sx={{ mr: 2 }} />
+              <Box>
+                <Skeleton variant="text" width={120} height={24} />
+                <Skeleton variant="text" width={150} height={16} />
+              </Box>
+            </>
+          ) : (
+            <>
+              <Avatar 
+                src={user?.profile_picture} 
+                sx={{ width: 40, height: 40, mr: 2 }}
+              >
+                {!user?.profile_picture && (user?.first_name?.[0] || <AccountCircle />)}
+              </Avatar>
+              <Box>
+                <Typography variant="subtitle1" noWrap>
+                  {user?.first_name} {user?.last_name}
+                </Typography>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {user?.email}
+                </Typography>
+              </Box>
+            </>
+          )}
+        </Box>
+        {isAdmin && !skeletonLoading && (
+          <Typography variant="caption" sx={{ 
+            display: 'inline-block',
+            bgcolor: 'primary.main', 
+            color: 'primary.contrastText',
+            px: 1,
+            py: 0.25,
+            borderRadius: 1,
+            fontSize: '0.6rem'
+          }}>
+            ADMIN
+          </Typography>
+        )}
+      </Box>
+    )}
+      
+      <Divider />
+      
+      <List sx={{ pt: 0 }}>
+        <ListItemButton 
+          onClick={() => navigateTo('/')}
+          selected={isActive('/')}
+        >
+          <ListItemIcon>
+            <HomeIcon color={isActive('/') ? 'primary' : 'inherit'} />
+          </ListItemIcon>
+          <ListItemText primary="Home" />
+        </ListItemButton>
+        
+        <ListItemButton 
+          onClick={() => navigateTo('/shop')}
+          selected={isActive('/shop')}
+        >
+          <ListItemIcon>
+            <StoreIcon color={isActive('/shop') ? 'primary' : 'inherit'} />
+          </ListItemIcon>
+          <ListItemText primary="Shop" />
+        </ListItemButton>
+        
+        <ListItemButton onClick={toggleSearch}>
+          <ListItemIcon>
+            <SearchOutlinedIcon />
+          </ListItemIcon>
+          <ListItemText primary="Search" />
+        </ListItemButton>
+        
+        <ListItemButton 
+          onClick={() => navigateTo('/cart')}
+          selected={isActive('/cart')}
+        >
+          <ListItemIcon>
+            <Badge badgeContent={cartItemsCount} color="error">
+              <ShoppingCartIcon color={isActive('/cart') ? 'primary' : 'inherit'} />
+            </Badge>
+          </ListItemIcon>
+          <ListItemText primary="Cart" />
+        </ListItemButton>
+      </List>
+      
+      <Divider />
+      
+      <List>
+        {isAuthenticated ? (
+          <>
+            <ListItemButton 
+              onClick={() => navigateTo('/profile')}
+              selected={isActive('/profile')}
+            >
+              <ListItemIcon>
+                <PersonIcon color={isActive('/profile') ? 'primary' : 'inherit'} />
+              </ListItemIcon>
+              <ListItemText primary="Profile" />
+            </ListItemButton>
+            
+            {isAdmin && (
+              <ListItemButton 
+                onClick={() => navigateTo('/admin')}
+                selected={isActive('/admin')}
+              >
+                <ListItemIcon>
+                  <DashboardIcon color={isActive('/admin') ? 'primary' : 'inherit'} />
+                </ListItemIcon>
+                <ListItemText primary="Admin Panel" />
+              </ListItemButton>
+            )}
+            
+            <ListItemButton onClick={handleLogout} disabled={loggingOut}>
+              <ListItemIcon>
+                {loggingOut ? <CircularProgress size={24} /> : <LogoutIcon />}
+              </ListItemIcon>
+              <ListItemText primary="Logout" />
+            </ListItemButton>
+          </>
+        ) : (
+          <ListItemButton onClick={() => navigateTo('/login')}>
+            <ListItemIcon>
+              <LoginIcon />
+            </ListItemIcon>
+            <ListItemText primary="Login" />
+          </ListItemButton>
+        )}
+      </List>
+      
+      <Box sx={{ 
+        mt: 'auto', 
+        p: 2, 
+        borderTop: `1px solid ${theme.palette.divider}`,
+        opacity: 0.7
+      }}>
+        <Typography variant="caption" color="text.secondary">
+          Session ID: {sessionId.substring(0, 8)}...
+        </Typography>
+      </Box>
+    </Drawer>
+  );
 
   return (
-    <AppBar position="sticky" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-      <Toolbar>
-        {isMobile && (
-          <IconButton
-            color="inherit"
-            aria-label="open drawer"
-            edge="start"
-            onClick={toggleMobileMenu}
-            sx={{ mr: 2 }}
-          >
-            <MenuIcon />
-          </IconButton>
-        )}
-        
-        <LogoText
-          variant="h6"
-          component={RouterLink}
-          to="/"
-        >
-          JEMSA<Box component="span" sx={{ color: 'primary.light' }}>TECHS</Box>
-        </LogoText>
-        
-        {!isMobile && (
-          <Box sx={{ flexGrow: 0 }}>
-            <Button color="inherit" component={RouterLink} to="/" startIcon={<Home />}>
-              Home
-            </Button>
-            <Button color="inherit" component={RouterLink} to="/shop" startIcon={<Store />}>
-              Shop
-            </Button>
-            {isAdmin && (
-              <Button color="inherit" component={RouterLink} to="/admin" startIcon={<Dashboard />}>
-                Admin
-              </Button>
-            )}
-          </Box>
-        )}
-        
-        <Box component="form" onSubmit={handleSearch} sx={{ flexGrow: 1, display: 'flex', justifyContent: 'center' }}>
-          <SearchBox>
-            <SearchIconWrapper>
-              <Search />
-            </SearchIconWrapper>
-            <StyledInputBase
-              placeholder="Search products…"
-              inputProps={{ 'aria-label': 'search' }}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </SearchBox>
-        </Box>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Tooltip title="Cart">
-            <IconButton 
-              color="inherit" 
-              component={RouterLink} 
-              to="/cart"
-              aria-label={`${cartItemsCount} items in cart`}
-              onClick={handleCartClick}
-              disabled={cartLoading}
+    <>
+      <AppBar 
+        position="sticky" 
+        elevation={0}
+        sx={{
+          backdropFilter: 'blur(8px)',
+          backgroundColor: theme.palette.mode === 'light' 
+            ? 'rgba(255, 255, 255, 0.8)' 
+            : 'rgba(18, 18, 18, 0.8)',
+          borderBottom: `1px solid ${theme.palette.divider}`,
+          color: theme.palette.text.primary
+        }}
+      >
+        <Toolbar sx={{ justifyContent: 'space-between' }}>
+          {/* Mobile menu button */}
+          {isMobile && (
+            <IconButton
+              edge="start"
+              color="inherit"
+              aria-label="menu"
+              onClick={toggleMobileMenu}
+              sx={{ mr: 1 }}
             >
-              <Badge badgeContent={cartItemsCount} color="error">
-                {cartLoading ? (
-                  <CircularProgress size={24} color="inherit" />
-                ) : (
-                  <ShoppingCart />
-                )}
-              </Badge>
+              <MenuIcon />
             </IconButton>
-          </Tooltip>
+          )}
           
-          {isAuthenticated ? (
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <IconButton
-                onClick={handleUserMenuOpen}
-                color="inherit"
-                aria-label="user menu"
+          {/* Logo */}
+          <Typography
+            variant="h6"
+            component={RouterLink}
+            to="/"
+            sx={{ 
+              textDecoration: 'none',
+              color: 'inherit',
+              fontWeight: 600,
+              letterSpacing: 0.5,
+              display: 'flex',
+              alignItems: 'center'
+            }}
+          >
+            JEMSA<Box component="span" sx={{ color: theme.palette.secondary.main }}>TECHS</Box>
+          </Typography>
+          
+          {/* Desktop Navigation */}
+          {!isMobile && (
+            <Box sx={{ display: 'flex', ml: 2 }}>
+              <Button 
+                component={RouterLink} 
+                to="/"
+                color={isActive('/') ? 'primary' : 'inherit'}
+                sx={{ 
+                  fontWeight: isActive('/') ? 600 : 400,
+                  textTransform: 'none'
+                }}
               >
-                <Avatar sx={{ bgcolor: 'secondary.main' }}>
-                  {user?.username?.[0]?.toUpperCase() || <Person />}
-                </Avatar>
-              </IconButton>
-              <Menu
-                anchorEl={userMenuAnchor}
-                open={Boolean(userMenuAnchor)}
-                onClose={handleUserMenuClose}
-              >
-                {[
-                  <MenuItem 
-                    key="profile" 
-                    component={RouterLink} 
-                    to="/profile"
-                    onClick={handleUserMenuClose}
-                  >
-                    <ListItemIcon>
-                      <Person fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Profile</ListItemText>
-                  </MenuItem>,
-                  <MenuItem 
-                    key="orders" 
-                    component={RouterLink} 
-                    to="/orders"
-                    onClick={handleUserMenuClose}
-                  >
-                    <ListItemIcon>
-                      <Receipt fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Orders</ListItemText>
-                  </MenuItem>,
-                  user?.user_type === 'ADMIN' && (
-                    <MenuItem 
-                      key="dashboard" 
-                      component={RouterLink} 
-                      to="/admin"
-                      onClick={handleUserMenuClose}
-                    >
-                      <ListItemIcon>
-                        <Dashboard fontSize="small" />
-                      </ListItemIcon>
-                      <ListItemText>Dashboard</ListItemText>
-                    </MenuItem>
-                  ),
-                  <Divider key="divider" />,
-                  <MenuItem 
-                    key="logout" 
-                    onClick={() => {
-                      handleUserMenuClose();
-                      handleLogout();
-                    }}
-                  >
-                    <ListItemIcon>
-                      <Logout fontSize="small" />
-                    </ListItemIcon>
-                    <ListItemText>Logout</ListItemText>
-                  </MenuItem>
-                ].filter(Boolean)}
-              </Menu>
-            </Box>
-          ) : (
-            <Box sx={{ display: { xs: 'none', md: 'flex' }, gap: 1 }}>
-              <Button
-                color="inherit"
-                component={RouterLink}
-                to="/login"
-                startIcon={<Login />}
-              >
-                Login
+                Home
               </Button>
-              <Button
-                variant="outlined"
-                color="inherit"
-                component={RouterLink}
-                to="/register"
-                startIcon={<PersonAdd />}
+              <Button 
+                component={RouterLink} 
+                to="/shop"
+                color={isActive('/shop') ? 'primary' : 'inherit'}
+                sx={{ 
+                  fontWeight: isActive('/shop') ? 600 : 400,
+                  textTransform: 'none'
+                }}
               >
-                Register
+                Shop
               </Button>
             </Box>
           )}
-        </Box>
-      </Toolbar>
-      
-      {/* Mobile drawer menu */}
-      <Drawer
-        anchor="left"
-        open={mobileMenuOpen}
-        onClose={toggleMobileMenu}
-      >
-        <Box
-          sx={{ width: 250 }}
-          role="presentation"
-        >
-          <List>
-            <ListItem button onClick={() => navigateAndCloseMenus('/')}>
-              <ListItemIcon><Home /></ListItemIcon>
-              <ListItemText primary="Home" />
-            </ListItem>
-            
-            <ListItem button onClick={() => navigateAndCloseMenus('/shop')}>
-              <ListItemIcon><Store /></ListItemIcon>
-              <ListItemText primary="Shop" />
-            </ListItem>
-            
-            <ListItem button onClick={() => navigateAndCloseMenus('/cart')}>
-              <ListItemIcon>
-                <Badge badgeContent={cartItemsCount} color="error">
-                  <ShoppingCart />
-                </Badge>
-              </ListItemIcon>
-              <ListItemText primary="Cart" />
-            </ListItem>
-            
-            <Divider />
-            
-            {isAuthenticated ? (
-              <>
-                <ListItem button onClick={() => navigateAndCloseMenus('/profile')}>
-                  <ListItemIcon><Person /></ListItemIcon>
-                  <ListItemText primary="Profile" />
-                </ListItem>
-                
-                <ListItem button onClick={() => navigateAndCloseMenus('/orders')}>
-                  <ListItemIcon><Receipt /></ListItemIcon>
-                  <ListItemText primary="My Orders" />
-                </ListItem>
-                
-                {isAdmin && adminMobileItems}
-                
-                <Divider />
-                
-                <ListItem button onClick={handleLogout}>
-                  <ListItemIcon><Logout /></ListItemIcon>
-                  <ListItemText primary="Logout" />
-                </ListItem>
-              </>
+          
+          {/* Search, Cart, and Profile */}
+          <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto' }}>
+
+            {/* Desktop Search */}
+            {!isMobile ? (
+              skeletonLoading ? (
+                <Skeleton variant="rounded" width={300} height={40} sx={{ borderRadius: '20px' }} />
+              ) : (
+                renderSearchBar()
+              )
             ) : (
-              <>
-                <ListItem button onClick={() => navigateAndCloseMenus('/login')}>
-                  <ListItemIcon><AccountCircle /></ListItemIcon>
-                  <ListItemText primary="Login" />
-                </ListItem>
-                
-                <ListItem button onClick={() => navigateAndCloseMenus('/register')}>
-                  <ListItemIcon><Person /></ListItemIcon>
-                  <ListItemText primary="Register" />
-                </ListItem>
-              </>
+              searchOpen && (
+                <Fade in={searchOpen}>
+                  <Box sx={{ 
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bgcolor: theme.palette.background.paper,
+                    zIndex: 1101,
+                    p: 1,
+                    boxShadow: '0 4px 8px rgba(0,0,0,0.1)',
+                  }}>
+                    {skeletonLoading ? (
+                      <Skeleton variant="rounded" height={40} width="100%" />
+                    ) : (
+                      renderSearchBar()
+                    )}
+                  </Box>
+                </Fade>
+              )
             )}
-          </List>
-        </Box>
-      </Drawer>
-    </AppBar>
+            
+            {/* Search Icon (Mobile) */}
+            {isMobile && !searchOpen && (
+              <IconButton color="inherit" onClick={toggleSearch}>
+                <SearchIcon />
+              </IconButton>
+            )}
+            
+            {/* Cart */}
+            <Tooltip title="Shopping Cart">
+              <IconButton 
+                color="inherit" 
+                component={RouterLink} 
+                to="/cart" 
+                aria-label={`Cart with ${cartItemsCount} items`}
+                sx={{ ml: 1 }}
+              >
+                <Badge badgeContent={skeletonLoading ? undefined : cartItemsCount} color="error">
+                  {skeletonLoading ? (
+                    <Box position="relative" display="inline-flex">
+                      <ShoppingCartIcon />
+                      <Box
+                        position="absolute"
+                        top={-5}
+                        right={-5}
+                        width={16}
+                        height={16}
+                      >
+                        <Skeleton variant="circular" width={16} height={16} />
+                      </Box>
+                    </Box>
+                  ) : (
+                    <ShoppingCartIcon />
+                  )}
+                </Badge>
+              </IconButton>
+            </Tooltip>
+            
+            {/* Profile/Account */}
+            {isAuthenticated ? (
+              <Tooltip title="Account">
+                <IconButton
+                  edge="end"
+                  color="inherit"
+                  onClick={handleProfileMenuOpen}
+                  sx={{ ml: 1 }}
+                >
+                  {skeletonLoading ? (
+                    <Skeleton variant="circular" width={32} height={32} />
+                  ) : user?.profile_picture ? (
+                    <Avatar 
+                      src={user.profile_picture} 
+                      alt={`${user.first_name} ${user.last_name}`}
+                      sx={{ 
+                        width: 32, 
+                        height: 32,
+                        border: `2px solid ${theme.palette.primary.main}` 
+                      }}
+                    />
+                  ) : (
+                    <AccountCircle />
+                  )}
+                </IconButton>
+              </Tooltip>
+            ) : (
+              skeletonLoading ? (
+                <Skeleton variant="rounded" width={80} height={36} sx={{ ml: 1 }} />
+              ) : (
+                <Button
+                  color="primary"
+                  variant="outlined"
+                  component={RouterLink}
+                  to="/login"
+                  startIcon={<LoginIcon />}
+                  sx={{ 
+                    ml: 1,
+                    borderRadius: '20px',
+                    textTransform: 'none'
+                  }}
+                >
+                  Login
+                </Button>
+              )
+            )}
+          </Box>
+        </Toolbar>
+      </AppBar>
+      
+      {/* Mobile Drawer */}
+      {renderMobileDrawer}
+      
+      {/* Profile Menu */}
+      {renderProfileMenu}
+    </>
   );
 };
 
-export default Header;
+export default ModernHeader;

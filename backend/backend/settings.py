@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+
 import os
 from pathlib import Path
 from datetime import timedelta
@@ -32,6 +33,7 @@ SECRET_KEY = 'django-insecure-4d3kde!!&dy9ehyn13u00y$v*cg1+=f$7k3*)rnc1-0=2y0)as
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
+# ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke']
 ALLOWED_HOSTS = ['*']
 
 
@@ -73,7 +75,7 @@ REST_FRAMEWORK = {
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',
+        'rest_framework.permissions.IsAuthenticatedOrReadOnly',  # Changed from IsAuthenticated
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -129,11 +131,22 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+   'default': {
+       'ENGINE': 'django.db.backends.sqlite3',
+       'NAME': BASE_DIR / 'db.sqlite3',
+   }
 }
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.mysql',
+#         'NAME': 'dablvqsi_jemsadb001',
+#         'USER': 'dablvqsi_db001jemsa',
+#         'PASSWORD': 'db001Jemsa#',
+#         'HOST': 'localhost',
+#         'PORT': '3306',
+#     }
+# }
 
 
 # Password validation
@@ -180,6 +193,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True 
 
 CORS_ALLOWED_ORIGINS = [
+    # "https://shop.jemsa.co.ke",
+    # "https://www.shop.jemsa.co.ke",
     "http://localhost:5173",  
     
 ]
@@ -202,8 +217,6 @@ SEND_OTP_VIA_EMAIL = os.getenv('SEND_OTP_VIA_EMAIL', True)  # Set this to True t
 
 AUTH_USER_MODEL = 'api.CustomUser'
 
-SESSION_COOKIE_AGE = 1209600  # 2 weeks
-SESSION_SAVE_EVERY_REQUEST = True
 
 # M-Pesa API Configurations
 # For security reasons, it's best to use environment variables
@@ -240,11 +253,31 @@ MPESA_CONFIG = {
 
 # Update session configuration
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
-# Remove SESSION_CACHE_ALIAS since we're not using Redis
-SESSION_COOKIE_AGE = 86400  # 24 hours in seconds
-SESSION_COOKIE_SECURE = True
-SESSION_COOKIE_HTTPONLY = True
-SESSION_SAVE_EVERY_REQUEST = False
+# Cookie settings
+SESSION_COOKIE_SECURE = True  # Only send cookies over HTTPS
+CSRF_COOKIE_SECURE = True  # Only send CSRF cookie over HTTPS
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript access to CSRF cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # Controls whether cookies are sent with cross-site requests
+CSRF_COOKIE_SAMESITE = 'Lax'  # Same as above for CSRF cookies
+
+# If your site needs to embed resources from other domains or be embedded itself
+# you might need to adjust these settings:
+# SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
+# CSRF_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
+
+# Set the cookie age (in seconds) - 2 weeks default
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+
+# If you need to support development environments
+if DEBUG:
+    SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
+    ALLOWED_HOSTS += ['localhost', '127.0.0.1']
+    CORS_ALLOWED_ORIGINS += [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
 
 # Add database indexing for better session query performance
 SESSION_DB_ALIAS = 'default'
@@ -254,7 +287,24 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
 
+#crontab -e
 #/usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions
 #0 */12 * * * /usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions >> /home/username/logs/session_cleanup.log 2>&1
 # Run every hour

@@ -12,6 +12,7 @@ import { adminAPI } from '../../services/api';
 import SalesOverview from './SalesOverview';
 import ProductPerformance from './ProductPerformance';
 import CategoryDistribution from './CategoryDistribution';
+import StatsCard from './StatsCard';
 
 const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -102,6 +103,8 @@ const AdminDashboard = () => {
             <ListItemText primary="Manage Orders" />
           </MenuItem>
         </>
+
+        <StatsCard/>
       <Grid container spacing={3}>
         <Grid item xs={12}>
           <SalesOverview data={dashboardData.sales_overview} loading={loading} />

@@ -16,17 +16,23 @@ const PopularProducts = ({ popularProducts, isSmallScreen }) => {
   }
 
   return (
-    <Box sx={{ my: 4 }}>
+    <Box sx={{ my: 4, mt: { xs: 4, md: 6 } }}>
       <Typography
-        variant="h5"
-        component="h2"
+        variant="h3"
         sx={{
-          mb: 3,
-          fontWeight: 'bold',
-          textAlign: { xs: 'center', md: 'left' }
+          textDecoration: 'none',
+          color: 'inherit',
+          fontWeight: 600,
+          letterSpacing: 0.5,
+          display: 'flex',
+          alignItems: 'center',
+          fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' } // Adjust sizes
         }}
       >
-        Popular Products
+        Most
+        <Box component="span" sx={{ color: theme.palette.secondary.main }}>
+          Popular
+        </Box>
       </Typography>
 
       <Box sx={{ position: 'relative' }}>

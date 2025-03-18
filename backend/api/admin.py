@@ -2,7 +2,7 @@ from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
     CustomUser, Category, Product, ProductImage, 
-    Cart, CartItem, GuestCart, GuestCartItem,
+    Cart, CartItem,
     Order, OrderItem, NewsletterSubscriber
 )
 
@@ -97,29 +97,6 @@ class CartItemAdmin(admin.ModelAdmin):
         return obj.total_price
     total_price.short_description = 'Total Price'
 
-# Guest Cart Admin
-class GuestCartItemInline(admin.TabularInline):
-    model = GuestCartItem
-    extra = 0
-
-@admin.register(GuestCart)
-class GuestCartAdmin(admin.ModelAdmin):
-    list_display = ('user_session_id', 'session_id', 'created_at', 'expires_at', 'is_expired')
-    list_filter = ('created_at',)
-    search_fields = ('user_session_id', 'session_id')
-    inlines = [GuestCartItemInline]
-    readonly_fields = ('is_expired',)
-    
-    def is_expired(self, obj):
-        return obj.is_expired()
-    is_expired.boolean = True
-    is_expired.short_description = 'Expired'
-
-@admin.register(GuestCartItem)
-class GuestCartItemAdmin(admin.ModelAdmin):
-    list_display = ('cart', 'product', 'quantity', 'added_at')
-    list_filter = ('added_at',)
-    search_fields = ('cart__user_session_id', 'product__name')
 
 # Order Admin
 class OrderItemInline(admin.TabularInline):

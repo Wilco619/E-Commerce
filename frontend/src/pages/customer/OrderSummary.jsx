@@ -63,7 +63,7 @@ const OrderSummary = ({ cart, formData }) => {
               secondary={`Quantity: ${item.quantity}`}
             />
             <Typography variant="body2">
-              Ksh {(item.quantity * item.product.discount_price).toFixed(2)}
+              Ksh {(item.quantity * item.product.discount_price).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
             </Typography>
           </ListItem>
         ))}
@@ -74,7 +74,7 @@ const OrderSummary = ({ cart, formData }) => {
       {/* Subtotal */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
         <Typography>Subtotal ({cartTotals.totalItems} items):</Typography>
-        <Typography>Ksh {subtotal.toFixed(2)}</Typography>
+        <Typography>Ksh {subtotal.toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</Typography>
       </Box>
       
       {/* Delivery Fee */}
@@ -91,7 +91,7 @@ const OrderSummary = ({ cart, formData }) => {
       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
         <Typography variant="h6">Total:</Typography>
         <Typography variant="h6" color="primary">
-          Ksh {totalAmount}
+          Ksh {totalAmount.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
         </Typography>
       </Box>
 

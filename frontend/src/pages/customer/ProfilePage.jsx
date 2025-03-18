@@ -11,13 +11,72 @@ import {
   CircularProgress,
   Snackbar,
   Alert,
-  Avatar
+  Avatar,
+  Card,
+  CardContent,
+  useTheme,
+  useMediaQuery,
+  styled
 } from '@mui/material';
 import PersonIcon from '@mui/icons-material/Person';
 import SaveIcon from '@mui/icons-material/Save';
+import EditIcon from '@mui/icons-material/Edit';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import LockIcon from '@mui/icons-material/Lock';
 import { authAPI } from '../../services/api';
+import { motion } from 'framer-motion';
+
+// Styled components for enhanced visuals
+const ProfileCard = styled(Paper)(({ theme }) => ({
+  borderRadius: 16,
+  boxShadow: '0 8px 24px rgba(0, 0, 0, 0.05)',
+  overflow: 'hidden',
+  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+  '&:hover': {
+    boxShadow: '0 12px 28px rgba(0, 0, 0, 0.08)',
+    transform: 'translateY(-4px)',
+  }
+}));
+
+const GradientAvatar = styled(Avatar)(({ theme }) => ({
+  width: 120,
+  height: 120,
+  background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+  boxShadow: '0 12px 24px rgba(0, 0, 0, 0.1)',
+  border: `4px solid ${theme.palette.background.paper}`,
+}));
+
+const ProfileButton = styled(Button)(({ theme }) => ({
+  borderRadius: 8,
+  padding: '10px 16px',
+  textTransform: 'none',
+  fontWeight: 500,
+  transition: 'all 0.2s ease',
+  '&:hover': {
+    transform: 'translateY(-2px)',
+    boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+  }
+}));
+
+const StyledTextField = styled(TextField)(({ theme }) => ({
+  '& .MuiOutlinedInput-root': {
+    borderRadius: 8,
+    '&:hover .MuiOutlinedInput-notchedOutline': {
+      borderColor: theme.palette.primary.main,
+    },
+    '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+      borderWidth: 2,
+    }
+  },
+  '& .MuiInputLabel-root': {
+    fontSize: '0.9rem',
+  }
+}));
 
 const ProfilePage = () => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -119,153 +178,191 @@ const ProfilePage = () => {
 
   if (loading) {
     return (
-      <Container sx={{ py: 4, display: 'flex', justifyContent: 'center' }}>
-        <CircularProgress />
+      <Container sx={{ height: '70vh', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+        <CircularProgress size={60} thickness={4} />
       </Container>
     );
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
+    <Container maxWidth="lg" sx={{ py: 6 }}>
+      <Typography variant="h4" fontWeight="500" sx={{ mb: 4, color: 'text.primary' }}>
+        Your Profile
+      </Typography>
+      
       <Grid container spacing={4}>
         {/* Sidebar */}
         <Grid item xs={12} md={4}>
-          <Paper sx={{ p: 3, mb: 3 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
-              <Avatar 
-                sx={{ 
-                  width: 100, 
-                  height: 100, 
-                  mb: 2,
-                  bgcolor: 'primary.main'
-                }}
-              >
-                <PersonIcon sx={{ fontSize: 60 }} />
-              </Avatar>
-              <Typography variant="h5">
-                {user?.username || 'User'}
-              </Typography>
-              <Typography color="textSecondary">
-                {user?.email || 'email@example.com'}
-              </Typography>
-            </Box>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            <Box>
-              <Typography variant="body2" color="textSecondary" gutterBottom>
-                Account Type
-              </Typography>
-              <Typography variant="body1" gutterBottom>
-                {user?.user_type === 'CUSTOMER' ? 'Customer' : (user?.user_type ? user.user_type.toLowerCase() : 'N/A')}
-              </Typography>
+          <Box component={motion.div} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <ProfileCard sx={{ p: 0, mb: 3 }}>
+              <Box sx={{ 
+                height: 80, 
+                background: `linear-gradient(120deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+              }}/>
               
-              <Typography variant="body2" color="textSecondary" sx={{ mt: 2 }} gutterBottom>
-                Member Since
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mt: -8, mb: 3, px: 3 }}>
+                <GradientAvatar>
+                  <PersonIcon sx={{ fontSize: 60 }} />
+                </GradientAvatar>
+                
+                <Typography variant="h5" sx={{ mt: 2, fontWeight: 600 }}>
+                  {user?.username || 'User'}
+                </Typography>
+                
+                <Typography variant="body1" color="text.secondary" sx={{ mb: 1 }}>
+                  {user?.email || 'email@example.com'}
+                </Typography>
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
+                  <Box sx={{ 
+                    px: 2, 
+                    py: 0.5, 
+                    borderRadius: 4, 
+                    backgroundColor: theme.palette.primary.main + '10',
+                    color: theme.palette.primary.main,
+                    fontWeight: 500,
+                    fontSize: '0.875rem'
+                  }}>
+                    {user?.user_type === 'CUSTOMER' ? 'Customer' : (user?.user_type ? user.user_type.toLowerCase() : 'N/A')}
+                  </Box>
+                </Box>
+              </Box>
+              
+              <Divider />
+              
+              <Box sx={{ p: 3 }}>                
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Member Since
+                  </Typography>
+                  <Typography variant="body2" fontWeight="500">
+                    {user?.date_joined ? new Date(user.date_joined).toLocaleDateString() : 'N/A'}
+                  </Typography>
+                </Box>
+              </Box>
+            </ProfileCard>
+            
+            <ProfileCard sx={{ p: 3 }}>
+              <Typography variant="h6" fontWeight="500" gutterBottom>
+                Account Actions
               </Typography>
-              <Typography variant="body1">
-                {user?.date_joined ? new Date(user.date_joined).toLocaleDateString() : 'N/A'}
-              </Typography>
-            </Box>
-          </Paper>
-          
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Account Actions
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-            <Button 
-              variant="outlined" 
-              color="primary" 
-              fullWidth 
-              sx={{ mb: 1 }}
-              href="/customer/orders"
-            >
-              View My Orders
-            </Button>
-            <Button 
-              variant="outlined" 
-              color="secondary" 
-              fullWidth
-              href="/change-password"
-            >
-              Change Password
-            </Button>
-          </Paper>
+              <Divider sx={{ mb: 3 }} />
+              
+              <ProfileButton 
+                variant="outlined" 
+                color="primary" 
+                fullWidth 
+                sx={{ mb: 2 }}
+                href="/customer/orders"
+                startIcon={<ReceiptIcon />}
+              >
+                View My Orders
+              </ProfileButton>
+              
+              <ProfileButton 
+                variant="outlined" 
+                color="secondary" 
+                fullWidth
+                href="/change-password"
+                startIcon={<LockIcon />}
+              >
+                Change Password
+              </ProfileButton>
+            </ProfileCard>
+          </Box>
         </Grid>
         
         {/* Main Content */}
         <Grid item xs={12} md={8}>
-          <Paper sx={{ p: 3 }}>
-            <Typography variant="h5" gutterBottom>
-              Profile Information
-            </Typography>
-            <Divider sx={{ mb: 3 }} />
-            
-            <form onSubmit={handleSubmit}>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="First Name"
-                    name="first_name"
-                    value={formData.first_name}
-                    onChange={handleChange}
-                    fullWidth
-                    error={!!errors.first_name}
-                    helperText={errors.first_name}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    label="Last Name"
-                    name="last_name"
-                    value={formData.last_name}
-                    onChange={handleChange}
-                    fullWidth
-                    error={!!errors.last_name}
-                    helperText={errors.last_name}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Phone Number"
-                    name="phone_number"
-                    value={formData.phone_number}
-                    onChange={handleChange}
-                    fullWidth
-                    error={!!errors.phone_number}
-                    helperText={errors.phone_number}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    label="Address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleChange}
-                    fullWidth
-                    multiline
-                    rows={3}
-                    error={!!errors.address}
-                    helperText={errors.address}
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
-                    <Button
-                      type="submit"
-                      variant="contained"
-                      color="primary"
-                      startIcon={<SaveIcon />}
-                      disabled={saving}
-                    >
-                      {saving ? 'Saving...' : 'Save Changes'}
-                    </Button>
-                  </Box>
-                </Grid>
-              </Grid>
-            </form>
-          </Paper>
+          <Box component={motion.div} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+            <ProfileCard sx={{ p: 0, overflow: 'hidden' }}>
+              <Box sx={{ 
+                p: 3, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                borderBottom: `1px solid ${theme.palette.divider}` 
+              }}>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <EditIcon sx={{ mr: 1.5, color: theme.palette.primary.main }} />
+                  <Typography variant="h6" fontWeight="500">
+                    Profile Information
+                  </Typography>
+                </Box>
+              </Box>
+              
+              <Box sx={{ p: 3 }}>
+                <form onSubmit={handleSubmit}>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} sm={6}>
+                      <StyledTextField
+                        label="First Name"
+                        name="first_name"
+                        value={formData.first_name}
+                        onChange={handleChange}
+                        fullWidth
+                        error={!!errors.first_name}
+                        helperText={errors.first_name}
+                        variant="outlined"
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <StyledTextField
+                        label="Last Name"
+                        name="last_name"
+                        value={formData.last_name}
+                        onChange={handleChange}
+                        fullWidth
+                        error={!!errors.last_name}
+                        helperText={errors.last_name}
+                        variant="outlined"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <StyledTextField
+                        label="Phone Number"
+                        name="phone_number"
+                        value={formData.phone_number}
+                        onChange={handleChange}
+                        fullWidth
+                        error={!!errors.phone_number}
+                        helperText={errors.phone_number || "Format: +1XXXXXXXXXX"}
+                        variant="outlined"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <StyledTextField
+                        label="Address"
+                        name="address"
+                        value={formData.address}
+                        onChange={handleChange}
+                        fullWidth
+                        multiline
+                        rows={3}
+                        error={!!errors.address}
+                        helperText={errors.address}
+                        variant="outlined"
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+                        <ProfileButton
+                          type="submit"
+                          variant="contained"
+                          color="primary"
+                          startIcon={<SaveIcon />}
+                          disabled={saving}
+                          size="large"
+                        >
+                          {saving ? 'Saving...' : 'Save Changes'}
+                        </ProfileButton>
+                      </Box>
+                    </Grid>
+                  </Grid>
+                </form>
+              </Box>
+            </ProfileCard>
+          </Box>
         </Grid>
       </Grid>
       
@@ -273,9 +370,15 @@ const ProfilePage = () => {
         open={toast.open} 
         autoHideDuration={6000} 
         onClose={handleCloseToast}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert onClose={handleCloseToast} severity={toast.severity} sx={{ width: '100%' }}>
+        <Alert 
+          onClose={handleCloseToast} 
+          severity={toast.severity} 
+          elevation={6}
+          variant="filled"
+          sx={{ width: '100%', borderRadius: 2 }}
+        >
           {toast.message}
         </Alert>
       </Snackbar>

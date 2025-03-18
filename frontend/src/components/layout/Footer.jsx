@@ -3,11 +3,11 @@ import { Link as RouterLink } from 'react-router-dom';
 import { 
   Box, Container, Grid, Typography, Link, Stack, Divider, 
   IconButton, TextField, Button, useTheme, useMediaQuery,
-  Snackbar, Alert 
+  Snackbar, Alert, Paper
 } from '@mui/material';
 import { 
-  Facebook, Twitter, Instagram, LinkedIn, 
-  Phone, Email, LocationOn, Send 
+  Facebook, X, Instagram, LinkedIn, 
+  Phone, Email, LocationOn, Send, ArrowForward
 } from '@mui/icons-material';
 import { productsAPI } from '../../services/api';
 
@@ -15,12 +15,12 @@ const Footer = () => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   
-  // Add state for newsletter
+  // State for newsletter
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
 
-  // Add newsletter submit handler
+  // Newsletter submit handler
   const handleNewsletterSubmit = async (e) => {
     e.preventDefault();
     if (!email) return;
@@ -40,7 +40,7 @@ const Footer = () => {
         setAlert({
           open: true,
           message: 'This email is already subscribed to our newsletter.',
-          severity: 'warning' // Using warning instead of error for better UX
+          severity: 'warning'
         });
       } else {
         setAlert({
@@ -59,101 +59,268 @@ const Footer = () => {
       sx={{
         bgcolor: 'primary.main',
         color: 'white',
-        py: 6,
+        pt: 8,
+        pb: 6,
         mt: 'auto',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          backgroundImage: 'radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.1) 0%, transparent 60%)',
+          pointerEvents: 'none'
+        }
       }}
       component="footer"
     >
       <Container maxWidth="lg">
-        <Grid container spacing={4}>
+        <Grid container spacing={5}>
           <Grid item xs={12} sm={6} md={3}>
             <Typography
-              variant="h6"
+              variant="h5"
               component={RouterLink}
               to="/"
-              sx={{ textDecoration: 'none', color: 'inherit', fontWeight: 700, mb: 2, display: 'block' }}
+              sx={{ 
+                textDecoration: 'none', 
+                color: 'inherit', 
+                fontWeight: 800, 
+                mb: 3, 
+                display: 'block',
+                letterSpacing: '0.5px'
+              }}
             >
-              JEMSA<Box component="span" sx={{ color: 'primary.light' }}>TECHS</Box>
+              JEMSA<Box component="span" sx={{ color: theme.palette.secondary.main }}>TECHS</Box>
             </Typography>
-            <Typography variant="body2" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 3, opacity: 0.9, lineHeight: 1.6 }}>
               Your one-stop shop for quality products at competitive prices.
               We provide a seamless shopping experience from browsing to delivery.
             </Typography>
-            <Stack direction="row" spacing={1}>
-              <IconButton color="inherit" aria-label="Facebook" size="small">
-                <Facebook />
+            <Stack direction="row" spacing={1.5}>
+              <IconButton 
+                color="inherit" 
+                aria-label="Facebook" 
+                sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                  transition: 'all 0.2s ease',
+                  '&:hover': { 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    transform: 'translateY(-3px)' 
+                  } 
+                }}
+              >
+                <Facebook fontSize="small" />
               </IconButton>
-              <IconButton color="inherit" aria-label="Twitter" size="small">
-                <Twitter />
+              <IconButton 
+                color="inherit" 
+                aria-label="Twitter" 
+                sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                  transition: 'all 0.2s ease',
+                  '&:hover': { 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    transform: 'translateY(-3px)' 
+                  } 
+                }}
+              >
+                <X fontSize="small" />
               </IconButton>
-              <IconButton color="inherit" aria-label="Instagram" size="small">
-                <Instagram />
+              <IconButton 
+                color="inherit" 
+                aria-label="Instagram" 
+                sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                  transition: 'all 0.2s ease',
+                  '&:hover': { 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    transform: 'translateY(-3px)' 
+                  } 
+                }}
+              >
+                <Instagram fontSize="small" />
               </IconButton>
-              <IconButton color="inherit" aria-label="LinkedIn" size="small">
-                <LinkedIn />
+              <IconButton 
+                color="inherit" 
+                aria-label="LinkedIn" 
+                sx={{ 
+                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                  transition: 'all 0.2s ease',
+                  '&:hover': { 
+                    bgcolor: 'rgba(255, 255, 255, 0.2)',
+                    transform: 'translateY(-3px)' 
+                  } 
+                }}
+              >
+                <LinkedIn fontSize="small" />
               </IconButton>
             </Stack>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ 
+              mb: 3, 
+              position: 'relative',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: 0,
+                width: 40,
+                height: 3,
+                backgroundColor: theme.palette.secondary.main,
+                borderRadius: 2
+              }
+            }}>
               Quick Links
             </Typography>
-            <Stack spacing={1}>
-              <Link component={RouterLink} to="/" color="inherit" underline="hover">
-                Home
-              </Link>
-              <Link component={RouterLink} to="/shop" color="inherit" underline="hover">
-                Shop
-              </Link>
-              <Link component={RouterLink} to="/cart" color="inherit" underline="hover">
-                Cart
-              </Link>
-              <Link component={RouterLink} to="/profile" color="inherit" underline="hover">
-                My Account
-              </Link>
-              <Link component={RouterLink} to="/orders" color="inherit" underline="hover">
-                Orders
-              </Link>
+            <Stack spacing={2}>
+              {[
+                { text: 'Home', link: '/' },
+                { text: 'Shop', link: '/shop' },
+                { text: 'Cart', link: '/cart' },
+                { text: 'My Account', link: '/profile' },
+                { text: 'Orders', link: '/orders' }
+              ].map((item, index) => (
+                <Link 
+                  key={index}
+                  component={RouterLink} 
+                  to={item.link} 
+                  color="inherit"
+                  underline="none"
+                  sx={{ 
+                    display: 'flex',
+                    alignItems: 'center',
+                    transition: 'all 0.2s ease',
+                    opacity: 0.9,
+                    '&:hover': { 
+                      opacity: 1,
+                      transform: 'translateX(5px)',
+                      color: theme.palette.secondary.light
+                    }
+                  }}
+                >
+                  <ArrowForward sx={{ mr: 1, fontSize: '0.9rem', opacity: 0.7 }} />
+                  {item.text}
+                </Link>
+              ))}
             </Stack>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ 
+              mb: 3, 
+              position: 'relative',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: 0,
+                width: 40,
+                height: 3,
+                backgroundColor: theme.palette.secondary.main,
+                borderRadius: 2
+              }
+            }}>
               Contact Us
             </Typography>
-            <Stack spacing={2}>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <LocationOn sx={{ mr: 1 }} fontSize="small" />
-                <Typography variant="body2">
-                  Bazzar Street, Nairobi City, Kenya
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Phone sx={{ mr: 1 }} fontSize="small" />
-                <Typography variant="body2">
-                  +254 (712) 834-651
-                </Typography>
-              </Box>
-              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Email sx={{ mr: 1 }} fontSize="small" />
-                <Typography variant="body2">
-                  info@jemsa.co.ke
-                </Typography>
-              </Box>
+            <Stack spacing={2.5}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+              <Paper sx={{ 
+                p: 1, 
+                borderRadius: 1.5, 
+                mr: 1.5, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <LocationOn fontSize="small" />
+              </Paper>
+              <Link 
+                href="https://maps.google.com/?q=Bazzar+Plaza,+Nairobi+City,+Kenya" 
+                target="_blank"
+                rel="noopener noreferrer"
+                color="inherit"
+                underline="hover"
+                sx={{ opacity: 0.9, mt: 0.5 }}
+              >
+                Bazaar Plaza, Nairobi City, Kenya
+              </Link>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+              <Paper sx={{ 
+                p: 1, 
+                borderRadius: 1.5, 
+                mr: 1.5, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Phone fontSize="small" />
+              </Paper>
+              <Link 
+                href="tel:+254720399250" 
+                color="inherit"
+                underline="hover"
+                sx={{ opacity: 0.9, mt: 0.5 }}
+              >
+                +254 (720) 399-250
+              </Link>
+            </Box>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
+              <Paper sx={{ 
+                p: 1, 
+                borderRadius: 1.5, 
+                mr: 1.5, 
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Email fontSize="small" />
+              </Paper>
+              <Link 
+                href="mailto:info@jemsa.co.ke" 
+                color="inherit"
+                underline="hover"
+                sx={{ opacity: 0.9, mt: 0.5 }}
+              >
+                info@jemsa.co.ke
+              </Link>
+            </Box>
             </Stack>
           </Grid>
           
           <Grid item xs={12} sm={6} md={3}>
-            <Typography variant="h6" sx={{ mb: 2 }}>
+            <Typography variant="h6" sx={{ 
+              mb: 3, 
+              position: 'relative',
+              '&::after': {
+                content: '""',
+                position: 'absolute',
+                bottom: -8,
+                left: 0,
+                width: 40,
+                height: 3,
+                backgroundColor: theme.palette.secondary.main,
+                borderRadius: 2
+              }
+            }}>
               Newsletter
             </Typography>
-            <Typography variant="body2" sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 3, opacity: 0.9, lineHeight: 1.6 }}>
               Subscribe to our newsletter for the latest deals and updates.
             </Typography>
             <Box 
               component="form" 
-              sx={{ display: 'flex' }}
+              sx={{ 
+                display: 'flex',
+                flexDirection: 'column'
+              }}
               onSubmit={handleNewsletterSubmit}
             >
               <TextField
@@ -166,12 +333,14 @@ const Footer = () => {
                 required
                 fullWidth
                 sx={{
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  input: { color: 'white' },
+                  mb: 1.5,
+                  bgcolor: 'rgba(255, 255, 255, 0.06)',
+                  borderRadius: 1,
+                  input: { color: 'white', px: 1.5, py: 1.2 },
                   '& .MuiOutlinedInput-root': {
-                    '& fieldset': { borderColor: 'rgba(255, 255, 255, 0.3)' },
-                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.5)' },
-                    '&.Mui-focused fieldset': { borderColor: 'primary.light' }
+                    '& fieldset': { borderColor: 'transparent' },
+                    '&:hover fieldset': { borderColor: 'rgba(255, 255, 255, 0.2)' },
+                    '&.Mui-focused fieldset': { borderColor: theme.palette.secondary.main }
                   }
                 }}
               />
@@ -181,35 +350,65 @@ const Footer = () => {
                 color="secondary" 
                 aria-label="subscribe"
                 disabled={loading}
-                sx={{ ml: 1 }}
+                sx={{ 
+                  alignSelf: 'flex-start',
+                  px: 3,
+                  py: 1,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  textTransform: 'none',
+                  '&:hover': {
+                    transform: 'translateY(-2px)',
+                    boxShadow: 3
+                  },
+                  transition: 'all 0.2s ease'
+                }}
               >
-                <Send fontSize="small" />
+                Subscribe
               </Button>
             </Box>
           </Grid>
         </Grid>
         
-        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.1)', my: 4 }} />
+        <Divider sx={{ borderColor: 'rgba(255, 255, 255, 0.08)', my: 5 }} />
         
-        <Box sx={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'space-between', alignItems: isMobile ? 'flex-start' : 'center' }}>
-          <Typography variant="body2" sx={{ mb: isMobile ? 2 : 0 }}>
+        <Box sx={{ 
+          display: 'flex', 
+          flexDirection: isMobile ? 'column' : 'row', 
+          justifyContent: 'space-between', 
+          alignItems: isMobile ? 'center' : 'center',
+          textAlign: isMobile ? 'center' : 'inherit' 
+        }}>
+          <Typography variant="body2" sx={{ mb: isMobile ? 2 : 0, opacity: 0.8 }}>
             © {new Date().getFullYear()} JEMSATECHS. All rights reserved.
           </Typography>
-          <Stack direction="row" spacing={3}>
-            <Link component={RouterLink} to="/terms" color="inherit" underline="hover" variant="body2">
-              Terms of Service
-            </Link>
-            <Link component={RouterLink} to="/privacy" color="inherit" underline="hover" variant="body2">
-              Privacy Policy
-            </Link>
-            <Link component={RouterLink} to="/faq" color="inherit" underline="hover" variant="body2">
-              FAQ
-            </Link>
+          <Stack 
+            direction={isMobile ? 'column' : 'row'} 
+            spacing={isMobile ? 1.5 : 3}
+            alignItems="center"
+          >
+            {[
+              { text: 'Terms of Service', link: '/terms' },
+              { text: 'Privacy Policy', link: '/privacy' },
+              { text: 'FAQ', link: '/faq' }
+            ].map((item, index) => (
+              <Link 
+                key={index}
+                component={RouterLink} 
+                to={item.link} 
+                color="inherit" 
+                underline="hover" 
+                variant="body2"
+                sx={{ opacity: 0.8, '&:hover': { opacity: 1 } }}
+              >
+                {item.text}
+              </Link>
+            ))}
           </Stack>
         </Box>
       </Container>
 
-      {/* Add Snackbar for notifications */}
+      {/* Snackbar for notifications */}
       <Snackbar
         open={alert.open}
         autoHideDuration={6000}

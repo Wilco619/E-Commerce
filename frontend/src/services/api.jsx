@@ -1,12 +1,12 @@
 import axios from "axios";
-import { ACCESS_TOKEN, REFRESH_TOKEN } from "./constants";
+import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from "./constants";
 
-const apiUrl = "http://localhost:8000/api/";
+const apiUrl = "http://127.0.0.1:8000/api/";
 // Base URL with /api/ prefix to match Django router patterns
 
 const API = axios.create({
   baseURL: import.meta.env.VITE_API_URL ? import.meta.env.VITE_API_URL : apiUrl,
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -80,12 +80,32 @@ API.interceptors.response.use(
         originalRequest.headers['Authorization'] = `Bearer ${access}`;
 
         onRefreshed(access);
+
+        // After successful refresh, update auth state if available
+        if (window.authState && window.authState.setIsAuthenticated) {
+          window.authState.setIsAuthenticated(true);
+        }
+
         return API(originalRequest);
       } catch (err) {
         onRefreshed(null);
         localStorage.removeItem(ACCESS_TOKEN);
         localStorage.removeItem(REFRESH_TOKEN);
-        window.location.href = '/login';
+
+        // Update global auth state if available
+        if (window.authState) {
+          if (window.authState.setIsAuthenticated) {
+            window.authState.setIsAuthenticated(false);
+          }
+          if (window.authState.setUser) {
+            window.authState.setUser(null);
+          }
+          if (window.authState.setIsAdmin) {
+            window.authState.setIsAdmin(false);
+          }
+        }
+        
+        window.location.href = '/';
         return Promise.reject(err);
       } finally {
         isRefreshing = false;
@@ -121,19 +141,15 @@ const authAPI = {
   },
   
   login: (credentials) => {
-    console.log('=== AUTH API LOGIN CALL ===');
-    console.log('Login endpoint:', `${API.defaults.baseURL}/login/`);
-    console.log('Login payload:', credentials);
-    console.log('Headers:', API.defaults.headers);
     
     // Add interceptor to log the response or error
     const interceptor = API.interceptors.response.use(
       response => {
-        console.log('Login API Success Response:', response);
+        
         return response;
       },
       error => {
-        console.log('Login API Error Response:', error);
+        
         return Promise.reject(error);
       }
     );
@@ -151,6 +167,7 @@ const authAPI = {
   
   logout: (refreshToken) => API.post('/logout/', { refresh: refreshToken }),
   changePassword: (passwords) => API.post('/change-password/', passwords),
+  forgotPassword: (email) => API.post('/forgot-password/', { email }),
   getCurrentUser: () => API.get('/profile/'),
   updateProfile: (userData) => API.put('/profile/', userData),
 };
@@ -219,55 +236,34 @@ const productsAPI = {
   getCategory: (slug) => API.get(`/categories/${slug}/`),
   createGuestCart: (sessionId) => 
     API.post('/carts/guest/', { user_session_id: sessionId }),
-  getGuestCart: (sessionId) => 
-    API.get('/carts/guest_cart/', { 
-      params: { 
-        user_session_id: sessionId 
-      }
-    }),
-  addToGuestCart: (sessionId, productId, quantity) => 
-    API.post('/carts/add_guest_item/', {
-      user_session_id: sessionId,
-      product_id: productId,
-      quantity: quantity
-    }),
-  migrateGuestCart: (sessionId) => 
-    API.post('/carts/migrate/', { 
-      user_session_id: sessionId 
-    }).catch(error => {
-      // Ignore specific errors that are expected
-      if (error.response?.data?.error?.includes('not found')) {
-        return { data: null };
-      }
-      throw error;
-    }),
-  getUserCart: async () => {
-    // First try to get existing cart
-    const response = await API.get('/carts/');
-    
-    // If no cart exists, create one
-    if (!response.data || !response.data.id) {
-        const newCartResponse = await API.post('/carts/');
-        return newCartResponse;
+  getGuestCart: (sessionId) => {
+    if (!sessionId) {
+      throw new Error('Guest session ID is required');
     }
-    
-    return response;
+    return API.get('/carts/guest_cart/', {
+      params: { user_session_id: sessionId }
+    });
   },
-  addToUserCart: async (productId, quantity) => {
-    try {
-        // Get or create cart
-        const cartResponse = await productsAPI.getUserCart();
-        const cartId = cartResponse.data.id;
-        
-        // Add item to cart
-        return API.post(`/carts/${cartId}/add_item/`, {
-            product_id: productId,
-            quantity: quantity
-        });
-    } catch (error) {
-        console.error('Error adding to cart:', error);
-        throw error;
+  addToGuestCart: (data) => {
+    if (!data.user_session_id) {
+      throw new Error('Guest session ID is required');
     }
+    return API.post('/carts/add_guest_item/', data);
+  },
+  migrateGuestCart: async (data) => {
+    if (!data.user_session_id) {
+      throw new Error('Guest session ID is required for migration');
+    }
+    return API.post('/carts/migrate_cart/', data);
+  },
+  getUserCart: () => {
+    return API.get('/carts/user_cart/');
+  },
+  addToUserCart: (productId, quantity) => {
+    return API.post('/carts/add_item/', { 
+      product_id: productId, 
+      quantity 
+    });
   },
   removeFromUserCart: async (itemId) => {
     try {
@@ -326,67 +322,64 @@ const productsAPI = {
 };
 
 // Cart API Services
-const cartAPI = {
-  getCart: () => API.get('/carts/'),
-  createCart: () => API.post('/carts/'),
-  addToCart: async (productId, quantity) => {
-    // Get or create cart first
-    const cartResponse = await API.get('/carts/');
-    const cart = cartResponse.data;
-    return API.post(`/carts/${cart.id}/add_item/`, { 
-        product_id: productId, 
-        quantity 
+export const cartAPI = {
+  getCart: () => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    return API.get('carts/current/', {
+      params: {
+        user_session_id: sessionId
+      }
     });
   },
-  updateCartItem: async (cartItemId, quantity) => {
-    try {
-      const response = await API.get('/carts/');
-      const cart = response.data.results[0];
-      
-      if (!cart) {
-        throw new Error('No cart found');
-      }
-      
-      return API.post(`/carts/${cart.id}/update_item/`, {
-        cart_item_id: cartItemId,
-        quantity
-      });
-    } catch (error) {
-      console.error('Error updating cart item:', error);
-      throw error;
+
+  getCurrentCart: () => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    if (!sessionId) {
+      const newSessionId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      sessionStorage.setItem(GUEST_SESSION_ID, newSessionId);
     }
+    return API.get('carts/current/', {
+      params: {
+        user_session_id: sessionStorage.getItem(GUEST_SESSION_ID)
+      }
+    });
   },
-  removeFromCart: async (cartItemId) => {
-    try {
-      const response = await API.get('/carts/');
-      const cart = response.data.results[0];
-      
-      if (!cart) {
-        throw new Error('No cart found');
-      }
-      
-      return API.post(`/carts/${cart.id}/remove_item/`, {
-        cart_item_id: cartItemId
-      });
-    } catch (error) {
-      console.error('Error removing cart item:', error);
-      throw error;
-    }
+
+  addItem: (data) => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    return API.post('/carts/add_item/', {
+      ...data,
+      user_session_id: sessionId
+    });
   },
-  clearCart: async () => {
-    try {
-      const response = await API.get('/carts/');
-      const cart = response.data.results[0];
-      
-      if (!cart) {
-        throw new Error('No cart found');
-      }
-      
-      return API.post(`/carts/${cart.id}/clear/`);
-    } catch (error) {
-      console.error('Error clearing cart:', error);
-      throw error;
-    }
+
+  updateItem: (data) => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    return API.post('/carts/update_item/', {
+      ...data,
+      user_session_id: sessionId
+    });
+  },
+
+  removeItem: (cartItemId) => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    return API.post('/carts/remove_item/', {
+      cart_item_id: cartItemId,
+      user_session_id: sessionId
+    });
+  },
+
+  clearCart: () => {
+    const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+    return API.post('carts/clear/', {
+      user_session_id: sessionId
+    });
+  },
+
+  migrateCart: (sessionId) => {
+    return API.post('carts/migrate/', {
+      user_session_id: sessionId
+    });
   }
 };
 
@@ -397,11 +390,27 @@ const orderAPI = {
   checkout: async (checkoutData) => {
     console.log('Checkout request data:', checkoutData);
     try {
-      const response = await API.post('/orders/checkout/', checkoutData);
+      // Ensure proper delivery_location format and POST method
+      const formattedData = {
+        ...checkoutData,
+        // If pickup, use KENCOM, otherwise use selected delivery location
+        delivery_location: checkoutData.is_pickup ? 'KENCOM' : checkoutData.delivery_location || '',
+      };
+
+      const response = await API.post('/orders/checkout/', formattedData, {
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
       console.log('Checkout response data:', response.data);
       return response;
     } catch (error) {
-      console.error('Checkout error:', error.response?.data || error.message);
+      console.error('Checkout error details:', {
+        response: error.response?.data,
+        status: error.response?.status,
+        headers: error.response?.headers
+      });
       throw error;
     }
   },
@@ -464,4 +473,4 @@ const adminAPI = {
   getDashboardData: () => API.get('/admin/dashboard/'),
 };
 
-export { API, authAPI, productsAPI, cartAPI, orderAPI, adminAPI };
+export { API, authAPI, productsAPI, orderAPI, adminAPI };

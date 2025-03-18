@@ -29,3 +29,11 @@ class IsOwnerOrAdmin(permissions.BasePermission):
         if hasattr(obj, 'user'):
             return obj.user == request.user
         return False
+
+class CartPermission(permissions.BasePermission):
+    def has_permission(self, request, view):
+        # Allow guest cart access for specific actions
+        if view.action in ['current', 'add_item', 'update_item', 'remove_item', 'clear']:
+            return True
+        # Require authentication for other actions
+        return request.user.is_authenticated

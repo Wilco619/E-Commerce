@@ -237,7 +237,7 @@ const AdminOrderDetail = ({ match }) => {
               </Box>
               <Divider sx={{ mb: 2 }} />
               <Typography variant="body1" gutterBottom>
-                <strong>Order Total:</strong> ${order.order_total}
+                <strong>Order Total:</strong> Ksh{order.order_total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
               </Typography>
               <Typography variant="body1" gutterBottom>
                 <strong>Items:</strong> {order.items.reduce((acc, item) => acc + item.quantity, 0)}
@@ -275,14 +275,14 @@ const AdminOrderDetail = ({ match }) => {
                         <TableCell component="th" scope="row">
                           {item.product_name}
                         </TableCell>
-                        <TableCell align="right">${item.price}</TableCell>
+                        <TableCell align="right">Ksh{item.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                         <TableCell align="right">{item.quantity}</TableCell>
-                        <TableCell align="right">${item.total}</TableCell>
+                        <TableCell align="right">Ksh{item.total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                       </TableRow>
                     ))}
                     <TableRow>
                       <TableCell colSpan={3} align="right"><strong>Order Total</strong></TableCell>
-                      <TableCell align="right"><strong>${order.order_total}</strong></TableCell>
+                      <TableCell align="right"><strong>Ksh{order.order_total.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</strong></TableCell>
                     </TableRow>
                   </TableBody>
                 </Table>

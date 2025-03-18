@@ -1,7 +1,7 @@
-import React from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { ProtectedRoute, AdminRoute } from './components/ProtectedRoutes'
-import { useAuth } from './authentication/AuthContext';
+import React, { useState, useEffect } from 'react';
+import { Routes, Route, useLocation } from 'react-router-dom';
+import { ProtectedRoute, AdminRoute } from './components/ProtectedRoutes';
+import PreLoader from './components/PreLoader';
 
 // Public Pages
 import HomePage from './pages/HomePage';
@@ -12,6 +12,9 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import CartPage from './pages/CartPage';
 import NotFoundPage from './pages/NotFoundPage';
+import OTPVerification from './pages/OTPVerification';
+import PasswordChange from './pages/PasswordChange';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 
 // Customer Pages
 import ProfilePage from './pages/customer/ProfilePage';
@@ -27,20 +30,27 @@ import AdminCategories from './pages/admin/AdminCategories';
 import AdminCategoryForm from './pages/admin/AdminCategoryForm';
 import AdminOrders from './pages/admin/AdminOrders';
 import AdminOrderDetail from './pages/admin/AdminOrderDetails';
-import OTPVerification from './pages/OTPVerification';
-import PasswordChange from './pages/PasswordChange';
 
-const PrivateRoute = ({ children }) => {
-  const { isAuthenticated } = useAuth();
-  const location = useLocation();
-
-  if (!isAuthenticated) {
-    sessionStorage.setItem('checkoutAttempted', 'true');
-    return <Navigate to="/register" state={{ from: location }} />;
+function App() {
+  const [isLoading, setIsLoading] = useState(true);
+  
+  useEffect(() => {
+    // Simulate initial loading time
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+  
+  if (isLoading) {
+    return <PreLoader />;
   }
-
-  return children;
-};
+  
+  return <AppRoutes />;
+}
 
 const AppRoutes = () => {
   return (
@@ -54,13 +64,14 @@ const AppRoutes = () => {
       <Route path="/register" element={<RegisterPage />} />
       <Route path="/cart" element={<CartPage />} />
       <Route path="/verify-otp" element={<OTPVerification />} />
-      <Route path="/change-password" element={<PasswordChange />} />
+      <Route path="/password-change" element={<PasswordChange />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       
       {/* Protected Customer Routes */}
       <Route element={<ProtectedRoute />}>
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/orders" element={<OrdersPage />} />
-        <Route path="/orders/:id" element={<OrderDetailPage />} />
+        <Route path="/order/:id" element={<OrderDetailPage />} />
         <Route path="/checkout" element={<CheckoutPage />} />
       </Route>
       
@@ -83,4 +94,4 @@ const AppRoutes = () => {
   );
 };
 
-export default AppRoutes;
+export default App;

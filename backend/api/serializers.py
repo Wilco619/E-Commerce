@@ -12,7 +12,7 @@ import logging
 
 from .models import (
     CustomUser, Category, Product, ProductImage, 
-    Cart, CartItem, Order, OrderItem, GuestCart, GuestCartItem,
+    Cart, CartItem, Order, OrderItem,
     NewsletterSubscriber
 )
 
@@ -351,14 +351,17 @@ class CartSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Cart
-        fields = ['id', 'user', 'cart_type', 'items', 'total']
-        read_only_fields = ['user', 'cart_type']
+        fields = ['id', 'user', 'session_id', 'cart_type', 'items', 'total']
 
     def get_total(self, obj):
-        return sum(
-            item.quantity * (item.product.discount_price or item.product.price)
-            for item in obj.items.all()
-        )
+        return sum(item.total_price for item in obj.items.all())
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Ensure consistent session_id field name
+        if instance.cart_type == 'guest':
+            data['user_session_id'] = instance.session_id
+        return data
 
 class OrderItemSerializer(serializers.ModelSerializer):
     product_name = serializers.ReadOnlyField(source='product.name')
@@ -432,32 +435,6 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = ['id', 'name', 'slug', 'price', 'discount_price', 'stock', 
                  'is_available', 'images']
-
-class GuestCartItemSerializer(serializers.ModelSerializer):
-    product = ProductSerializer(read_only=True)
-    total = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = GuestCartItem
-        fields = ['id', 'product', 'quantity', 'added_at', 'total']
-    
-    def get_total(self, obj):
-        product_price = obj.product.discount_price or obj.product.price
-        return obj.quantity * product_price
-
-class GuestCartSerializer(serializers.ModelSerializer):
-    items = GuestCartItemSerializer(many=True, read_only=True)
-    total = serializers.SerializerMethodField()
-    
-    class Meta:
-        model = GuestCart
-        fields = ['id', 'user_session_id', 'items', 'total', 'created_at', 'updated_at']
-
-    def get_total(self, obj):
-        return sum(
-            item.quantity * (item.product.discount_price or item.product.price)
-            for item in obj.items.all()
-        )
 
 class NewsletterSubscriberSerializer(serializers.ModelSerializer):
     class Meta:

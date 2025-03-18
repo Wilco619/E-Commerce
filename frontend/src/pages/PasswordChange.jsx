@@ -13,7 +13,13 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Divider
+  Divider,
+  LinearProgress,
+  Fade,
+  useTheme,
+  useMediaQuery,
+  Container,
+  alpha 
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import VisibilityIcon from '@mui/icons-material/Visibility';
@@ -23,15 +29,35 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { authAPI } from '../services/api';
 
 const PasswordChange = () => {
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  
   const [formData, setFormData] = useState({
     old_password: '',
     new_password: '',
     confirm_password: ''
   });
+
+  const [passwordVisibility, setPasswordVisibility] = useState({
+    old_password: false,
+    new_password: false,
+    confirm_password: false
+  });
+
+  // Calculate password strength
+  const calculatePasswordStrength = () => {
+    const requirements = Object.values(passwordRequirements).filter(Boolean).length;
+    return (requirements / 6) * 100;
+  };
+
+  const getStrengthColor = (strength) => {
+    if (strength < 30) return theme.palette.error.main;
+    if (strength < 60) return theme.palette.warning.main;
+    return theme.palette.success.main;
+  };
   
-  const [showOldPassword, setShowOldPassword] = useState(false);
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -133,53 +159,54 @@ const PasswordChange = () => {
   };
   
   const togglePasswordVisibility = (field) => {
-    switch (field) {
-      case 'old_password':
-        setShowOldPassword(!showOldPassword);
-        break;
-      case 'new_password':
-        setShowNewPassword(!showNewPassword);
-        break;
-      case 'confirm_password':
-        setShowConfirmPassword(!showConfirmPassword);
-        break;
-      default:
-        break;
-    }
+    setPasswordVisibility(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
   };
+
+  const passwordStrength = calculatePasswordStrength();
   
   return (
-    <Box 
-      sx={{ 
-        display: 'flex', 
-        flexDirection: 'column', 
-        alignItems: 'center', 
-        mt: 4,
-        mb: 4 
-      }}
-    >
-      <Paper 
-        elevation={3} 
+    <Container maxWidth="sm">
+    <Fade in={true} timeout={800}>
+      <Box 
         sx={{ 
-          p: 4, 
           display: 'flex', 
           flexDirection: 'column', 
-          alignItems: 'center',
-          maxWidth: 500,
-          mx: 'auto',
-          width: '100%'
+          alignItems: 'center', 
+          my: 4
         }}
       >
+        <Paper 
+          elevation={3} 
+          sx={{ 
+            p: isMobile ? 3 : 4, 
+            borderRadius: 2,
+            width: '100%',
+            boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+            transition: 'all 0.3s ease-in-out',
+            '&:hover': {
+              boxShadow: '0 12px 32px rgba(0,0,0,0.15)'
+            }
+          }}
+        >
         <Box 
           sx={{ 
             bgcolor: 'primary.main', 
             color: 'white', 
-            p: 2, 
+            p: 1.5, 
+            width: 40,
+            height: 40,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
             borderRadius: '50%',
-            mb: 2
+            mb: 2,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
           }}
         >
-          <LockOutlinedIcon />
+          <LockOutlinedIcon fontSize="medium" />
         </Box>
         
         <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
@@ -205,7 +232,7 @@ const PasswordChange = () => {
             fullWidth
             name="old_password"
             label="Current Password"
-            type={showOldPassword ? 'text' : 'password'}
+            type={passwordVisibility.old_password ? 'text' : 'password'}
             id="old_password"
             autoComplete="current-password"
             value={formData.old_password}
@@ -218,7 +245,7 @@ const PasswordChange = () => {
                     onClick={() => togglePasswordVisibility('old_password')}
                     edge="end"
                   >
-                    {showOldPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    {passwordVisibility.old_password ? <VisibilityOffIcon /> : <VisibilityIcon />}
                   </IconButton>
                 </InputAdornment>
               ),
@@ -231,7 +258,7 @@ const PasswordChange = () => {
             fullWidth
             name="new_password"
             label="New Password"
-            type={showNewPassword ? 'text' : 'password'}
+            type={passwordVisibility.new_password ? 'text' : 'password'}
             id="new_password"
             autoComplete="new-password"
             value={formData.new_password}
@@ -244,12 +271,37 @@ const PasswordChange = () => {
                     onClick={() => togglePasswordVisibility('new_password')}
                     edge="end"
                   >
-                    {showNewPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    {passwordVisibility.new_password ? <VisibilityOffIcon /> : <VisibilityIcon />}
                   </IconButton>
                 </InputAdornment>
               ),
             }}
           />
+
+          {formData.new_password && (
+            <Box sx={{ mt: 1, mb: 2 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
+                <Typography variant="caption" color="text.secondary">
+                  Password Strength
+                </Typography>
+                <Typography variant="caption" sx={{ color: getStrengthColor(passwordStrength) }}>
+                  {passwordStrength < 30 ? 'Weak' : passwordStrength < 60 ? 'Moderate' : 'Strong'}
+                </Typography>
+              </Box>
+              <LinearProgress 
+                variant="determinate" 
+                value={passwordStrength} 
+                sx={{ 
+                  height: 6, 
+                  borderRadius: 3,
+                  backgroundColor: theme.palette.grey[200],
+                  '& .MuiLinearProgress-bar': {
+                    backgroundColor: getStrengthColor(passwordStrength)
+                  }
+                }} 
+              />
+            </Box>
+          )}
           
           <TextField
             margin="normal"
@@ -257,7 +309,7 @@ const PasswordChange = () => {
             fullWidth
             name="confirm_password"
             label="Confirm New Password"
-            type={showConfirmPassword ? 'text' : 'password'}
+            type={passwordVisibility.confirm_password ? 'text' : 'password'}
             id="confirm_password"
             autoComplete="new-password"
             value={formData.confirm_password}
@@ -270,7 +322,7 @@ const PasswordChange = () => {
                     onClick={() => togglePasswordVisibility('confirm_password')}
                     edge="end"
                   >
-                    {showConfirmPassword ? <VisibilityOffIcon /> : <VisibilityIcon />}
+                    {passwordVisibility.confirm_password ? <VisibilityOffIcon /> : <VisibilityIcon />}
                   </IconButton>
                 </InputAdornment>
               ),
@@ -283,74 +335,88 @@ const PasswordChange = () => {
             Password Requirements:
           </Typography>
           
-          <List dense sx={{ bgcolor: 'background.paper' }}>
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.length ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="At least 8 characters long" />
-            </ListItem>
-            
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.lowercase ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="At least one lowercase letter" />
-            </ListItem>
-            
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.uppercase ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="At least one uppercase letter" />
-            </ListItem>
-            
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.number ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="At least one number" />
-            </ListItem>
-            
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.special ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="At least one special character" />
-            </ListItem>
-            
-            <ListItem>
-              <ListItemIcon>
-                {passwordRequirements.match ? 
-                  <CheckCircleOutlineIcon color="success" /> : 
-                  <ErrorOutlineIcon color="error" />}
-              </ListItemIcon>
-              <ListItemText primary="Passwords match" />
-            </ListItem>
-          </List>
+          <Box sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+            gap: 1.5
+          }}>
+            {Object.entries(passwordRequirements).map(([key, value]) => (
+              <Box 
+                key={key} 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center',
+                  transition: 'all 0.2s ease-in-out',
+                  p: 1,
+                  borderRadius: 1,
+                  backgroundColor: value ? 
+                    alpha(theme.palette.success.main, 0.08) : 
+                    'transparent'
+                }}
+              >
+                {value ? 
+                  <CheckCircleOutlineIcon 
+                    color="success" 
+                    fontSize="small" 
+                    sx={{ mr: 1 }} 
+                  /> : 
+                  <ErrorOutlineIcon 
+                    color="error" 
+                    fontSize="small" 
+                    sx={{ mr: 1 }} 
+                  />
+                }
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    color: value ? 
+                      theme.palette.success.dark : 
+                      theme.palette.text.secondary,
+                    fontWeight: value ? 500 : 400
+                  }}
+                >
+                  {key === 'length' && 'At least 8 characters'}
+                  {key === 'lowercase' && 'One lowercase letter'}
+                  {key === 'uppercase' && 'One uppercase letter'}
+                  {key === 'number' && 'One number'}
+                  {key === 'special' && 'One special character'}
+                  {key === 'match' && 'Passwords match'}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
           
           <Button
             type="submit"
             fullWidth
             variant="contained"
-            sx={{ mt: 3, mb: 2 }}
+            size="large"
+            sx={{ 
+              mt: 4, 
+              mb: 2,
+              py: 1.5,
+              borderRadius: 1.5,
+              textTransform: 'none',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+              fontWeight: 600,
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                boxShadow: '0 6px 16px rgba(0,0,0,0.2)',
+                transform: 'translateY(-1px)'
+              }
+            }}
             disabled={loading}
           >
-            {loading ? <CircularProgress size={24} /> : 'Change Password'}
+            {loading ? 
+              <CircularProgress size={24} color="inherit" /> : 
+              'Change Password'
+            }
           </Button>
         </Box>
-      </Paper>
-    </Box>
+        </Paper>
+      </Box>
+    </Fade>
+  </Container>
   );
 };
 

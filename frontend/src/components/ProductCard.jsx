@@ -6,14 +6,14 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import Rating from '@mui/material/Rating';
 
 const ProductCard = ({ product, selectedImage, setSelectedImage, compact }) => (
-  <Card 
-    sx={{ 
+  <Card
+    sx={{
       height: '100%',
-      width: compact ? 150 : 280, // Adjust width based on compact prop
+      width: compact ? 190 : 280, // Increased width for compact mode from 150 to 170
       flex: '0 0 auto',
-      display: 'flex', 
+      display: 'flex',
       flexDirection: 'column',
-      margin: '0 2px', // Reduced margin from 4px to 2px
+      margin: '0 1px', // Further reduced margin from 2px to 1px
       transition: 'transform 0.3s, box-shadow 0.3s',
       '&:hover': {
         transform: 'translateY(-8px)',
@@ -21,16 +21,23 @@ const ProductCard = ({ product, selectedImage, setSelectedImage, compact }) => (
       }
     }}
   >
-    <Box sx={{ position: 'relative' }}>
+    <Box 
+      sx={{ 
+        position: 'relative',
+        cursor: 'pointer' // Add cursor pointer to indicate clickable area
+      }}
+      component={RouterLink}
+      to={`/product/${product.slug}`}
+    >
       <CardMedia
         component="img"
-        height={compact ? "120" : "200"} // Reduce image height for compact mode
+        height={compact ? "120" : "200"} // Keep the same height
         image={selectedImage || product.feature_image || '/placeholder-product.jpg'}
         alt={product.name}
       />
       {product.discount_price && (
-        <Box 
-          sx={{ 
+        <Box
+          sx={{
             position: 'absolute',
             top: 10,
             right: 10,
@@ -53,70 +60,76 @@ const ProductCard = ({ product, selectedImage, setSelectedImage, compact }) => (
       )}
     </Box>
     
-    <CardContent sx={{ flexGrow: 1, p: compact ? 1 : 2 }}> {/* Reduce padding for compact mode */}
-      <Typography 
-        gutterBottom 
-        variant={compact ? "subtitle1" : "h6"} 
-        component="h3" 
+    <CardContent sx={{ flexGrow: 1, p: compact ? 1 : 2, pt: compact ? 1 : 1.5 }}> {/* Reduced top padding slightly */}
+      <Typography
+        gutterBottom
+        variant={compact ? "subtitle1" : "h6"}
+        component="h3"
         noWrap
-        sx={{ fontSize: compact ? '0.9rem' : undefined }}
+        sx={{ 
+          fontSize: compact ? '0.9rem' : undefined,
+          mb: 0.5 // Reduced bottom margin
+        }}
       >
         {product.name}
       </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+      <Typography 
+        variant="body2" 
+        color="text.secondary" 
+        sx={{ mb: 0.5 }} // Reduced margin
+      >
         {product.category_name || product.category?.name || "Uncategorized"}
       </Typography>
-      <Rating 
-        value={product.rating || 4.5} 
-        precision={0.5} 
-        size="small" 
-        readOnly 
-        sx={{ mb: 1 }}
+      <Rating
+        value={product.rating || 4.5}
+        precision={0.5}
+        size="small"
+        readOnly
+        sx={{ mb: 0.5 }} // Reduced margin
       />
       <Box sx={{ display: 'flex', alignItems: 'center' }}>
         {product.discount_price ? (
           <>
             <Typography variant="h6" color="primary" sx={{ mr: 1, fontSize: '0.85rem' }}>
-              Ksh {product.discount_price}
+              Ksh {product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
             </Typography>
             <Typography variant="body2" color="error" sx={{ textDecoration: 'line-through', fontSize: '0.80rem' }}>
-              Ksh {product.price}
+              Ksh {product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
             </Typography>
           </>
         ) : (
           <Typography variant="h6">
-            Ksh {product.price}
+            Ksh {product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
           </Typography>
         )}
       </Box>
       {product.weekly_orders > 0 && (
-        <Typography 
-          variant="caption" 
+        <Typography
+          variant="caption"
           color="text.secondary"
-          sx={{ 
+          sx={{
             display: 'block',
-            mt: 1
+            mt: 0.5 // Reduced margin
           }}
         >
           {product.weekly_orders} orders this week
         </Typography>
       )}
     </CardContent>
-    <CardActions sx={{ justifyContent: 'space-between', px: compact ? 1 : 2, pb: compact ? 1 : 2 }}>
-      <Button 
-        variant="outlined" 
-        size="small" 
-        component={RouterLink} 
+    <CardActions sx={{ justifyContent: 'space-between', px: compact ? 1 : 2, pb: compact ? 1 : 2, pt: 0 }}> {/* Remove top padding */}
+      <Button
+        variant="outlined"
+        size="small"
+        component={RouterLink}
         to={`/product/${product.slug}`}
         startIcon={<ShoppingBagIcon />}
       >
         View
       </Button>
       <Box>
-        <IconButton size="small" color="primary" sx={{ mr: 1 }}>
+        <IconButton size="small" color="primary">
           <FavoriteIcon />
         </IconButton>
-        
       </Box>
     </CardActions>
   </Card>

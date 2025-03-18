@@ -1,152 +1,98 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useAuth } from '../authentication/AuthContext';
-import { useSession } from './SessionContext';
-import { productsAPI } from '../services/api';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useSnackbar } from 'notistack';
+import { cartAPI } from '../services/api';
+import { useAuth } from './AuthContext';
+import { GUEST_SESSION_ID } from '../services/constants';
 
-const CartContext = createContext(null);
-
-export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) {
-    throw new Error('useCart must be used within a CartProvider');
-  }
-  return context;
-};
+export const CartContext = createContext(null);
 
 export const CartProvider = ({ children }) => {
-  const { user } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const { enqueueSnackbar } = useSnackbar();
   const [cart, setCart] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null); // Add error state
-  const [sessionId] = useState(() => {
-    return sessionStorage.getItem('guestSessionId') || 
-           `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const initializeCart = async () => {
-      try {
-        setLoading(true);
-        setError(null); // Reset error state
-        if (user) {
-          // Fetch user cart
-          const response = await productsAPI.getUserCart();
-          setCart(response.data);
-        } else {
-          // Store session ID if not exists
-          if (!sessionStorage.getItem('guestSessionId')) {
-            sessionStorage.setItem('guestSessionId', sessionId);
-          }
-          // Fetch guest cart
-          const response = await productsAPI.getGuestCart(sessionId);
-          setCart(response.data);
-        }
-      } catch (error) {
-        console.error('Error initializing cart:', error);
-        setError(error.message || 'Failed to initialize cart');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeCart();
-  }, [user, sessionId]);
-
-  const fetchCart = async () => {
-    if (!user && !sessionId) return;
-
+  const fetchCart = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = user
-        ? await productsAPI.getUserCart()
-        : await productsAPI.getGuestCart(sessionId);
+
+      // Ensure guest session exists if not authenticated
+      if (!isAuthenticated && !sessionStorage.getItem(GUEST_SESSION_ID)) {
+        const newSessionId = `guest_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        sessionStorage.setItem(GUEST_SESSION_ID, newSessionId);
+      }
+
+      const response = await cartAPI.getCurrentCart();
       setCart(response.data);
     } catch (err) {
       console.error('Error fetching cart:', err);
       setError(err.message);
+      enqueueSnackbar('Failed to fetch cart', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [isAuthenticated, enqueueSnackbar]);
+
+  // Add this function to refresh the cart
+  const refreshCart = async () => {
+    setLoading(true);
+    try {
+      // Use cartAPI.getCart() or similar method depending on your setup
+      const response = await cartAPI.getCurrentCart();
+      setCart(response.data);
+    } catch (error) {
+      console.error('Failed to refresh cart:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchCart();
-  }, [user, sessionId]);
-
-  useEffect(() => {
-    const migrateCartIfNeeded = async () => {
-      try {
-        // Only attempt migration if we have a session ID and user just logged in
-        if (user && sessionId) {
-          const guestCart = await productsAPI.getGuestCart(sessionId);
-          
-          // Only migrate if guest cart exists and has items
-          if (guestCart?.data?.items?.length > 0) {
-            await productsAPI.migrateGuestCart(sessionId);
-            // Clear session ID after successful migration
-            localStorage.removeItem('userSessionId');
-          }
-        }
-      } catch (error) {
-        // Ignore "cart not found" errors as they're expected for new users
-        if (!error.response?.data?.error?.includes('not found')) {
-          console.error('Cart migration error:', error);
-        }
-      }
-    };
-
-    migrateCartIfNeeded();
-  }, [user, sessionId]);
-
-  const addToCart = async (productId, quantity = 1) => {
-    try {
-      if (user) {
-        // For authenticated users
-        const response = await productsAPI.addToUserCart(productId, quantity);
-        setCart(response.data);
-      } else {
-        // For guest users
-        const response = await productsAPI.addToGuestCart(sessionId, productId, quantity);
-        setCart(response.data);
-      }
-    } catch (error) {
-      console.error('Error adding to cart:', error);
-      throw error;
-    }
-  };
-
-  const removeFromCart = async (itemId) => {
+  const addToCart = async (productId, quantity) => {
     try {
       setLoading(true);
-      if (user) {
-        await productsAPI.removeFromUserCart(itemId);
-      } else {
-        await productsAPI.removeFromGuestCart(sessionId, itemId);
+      const cart = await cartAPI.addItem({ 
+        product_id: productId, 
+        quantity 
+      });
+      
+      if (cart.data.error) {
+        throw new Error(cart.data.error);
       }
-      await fetchCart(); // Refresh cart after removal
+      
+      await fetchCart();
       return true;
-    } catch (error) {
-      console.error('Error removing from cart:', error);
-      return false;
+    } catch (err) {
+      console.error('Error adding to cart:', err);
+      throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const updateCartItem = async (itemId, quantity) => {
+  const updateCartItem = async (cartItemId, quantity) => {
     try {
       setLoading(true);
-      if (user) {
-        await productsAPI.updateUserCartItem(itemId, quantity);
-      } else {
-        await productsAPI.updateGuestCartItem(sessionId, itemId, quantity);
-      }
-      await fetchCart(); // Refresh cart after update
-      return true;
-    } catch (error) {
-      console.error('Error updating cart item:', error);
-      return false;
+      await cartAPI.updateItem({ cart_item_id: cartItemId, quantity });
+      await fetchCart();
+    } catch (err) {
+      setError(err.message);
+      enqueueSnackbar('Failed to update item', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeFromCart = async (cartItemId) => {
+    try {
+      setLoading(true);
+      await cartAPI.removeItem(cartItemId);
+      await fetchCart();
+      enqueueSnackbar('Item removed from cart', { variant: 'success' });
+    } catch (err) {
+      setError(err.message);
+      enqueueSnackbar('Failed to remove item', { variant: 'error' });
     } finally {
       setLoading(false);
     }
@@ -155,32 +101,55 @@ export const CartProvider = ({ children }) => {
   const clearCart = async () => {
     try {
       setLoading(true);
-      if (user) {
-        await productsAPI.clearUserCart();
-      } else {
-        await productsAPI.clearGuestCart(sessionId);
-      }
-      setCart(null);
-      return true;
-    } catch (error) {
-      console.error('Error clearing cart:', error);
-      return false;
+      await cartAPI.clearCart();
+      await fetchCart();
+      enqueueSnackbar('Cart cleared', { variant: 'success' });
+    } catch (err) {
+      setError(err.message);
+      enqueueSnackbar('Failed to clear cart', { variant: 'error' });
     } finally {
       setLoading(false);
     }
   };
 
+  // Handle cart migration on login
+  useEffect(() => {
+    if (isAuthenticated) {
+      const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+      if (sessionId) {
+        setLoading(true);
+        cartAPI.migrateCart(sessionId)
+          .then(() => {
+            sessionStorage.removeItem(GUEST_SESSION_ID);
+            fetchCart();
+            enqueueSnackbar('Cart transferred successfully', { variant: 'success' });
+          })
+          .catch((err) => {
+            console.error('Cart migration failed:', err);
+            enqueueSnackbar('Failed to transfer cart', { variant: 'error' });
+          })
+          .finally(() => {
+            setLoading(false);
+          });
+      }
+    }
+  }, [isAuthenticated, fetchCart, enqueueSnackbar]);
+
+  // Initial cart fetch
+  useEffect(() => {
+    fetchCart();
+  }, [fetchCart]);
+
   const value = {
     cart,
     loading,
     error,
-    setCart,
-    fetchCart,
     addToCart,
-    removeFromCart,
     updateCartItem,
+    removeFromCart,
     clearCart,
-    refreshCart: fetchCart
+    fetchCart,
+    refreshCart
   };
 
   return (
@@ -188,4 +157,12 @@ export const CartProvider = ({ children }) => {
       {children}
     </CartContext.Provider>
   );
+};
+
+export const useCart = () => {
+  const context = useContext(CartContext);
+  if (!context) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
 };

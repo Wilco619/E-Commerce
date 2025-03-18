@@ -1,14 +1,30 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { 
-  Container, Box, Typography, Button, Paper, Grid, TextField, InputAdornment, IconButton, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox, Slider, Drawer, List, ListItem, Chip, CircularProgress, Pagination, Breadcrumbs, Link, Card, CardMedia, CardContent, CardActions 
+  Container, Skeleton,  Box, Typography, Button, Paper, Grid, TextField, InputAdornment, IconButton, FormControl, InputLabel, Select, MenuItem, FormControlLabel, Checkbox, Slider, Drawer, List, ListItem, Chip, CircularProgress, Pagination, Breadcrumbs, Link, Card, CardMedia, CardContent, CardActions 
 } from '@mui/material';
 import { useLocation, useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useAuth } from '../authentication/AuthContext';
 import { useCart } from '../authentication/CartContext';
 import { useSnackbar } from 'notistack';
-import { productsAPI } from '../services/api';
+import { productsAPI, cartAPI } from '../services/api';
 import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, AddShoppingCart as AddShoppingCartIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, NavigateNext as NavigateNextIcon } from '@mui/icons-material';
 import { Divider } from '@mui/material';
+
+const ProductSkeleton = () => {
+  return (
+    <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+      <Skeleton variant="rectangular" sx={{ pt: '70%' }} animation="wave" />
+      <CardContent sx={{ flexGrow: 1, py: 1, px: 1.5 }}>
+        <Skeleton animation="wave" height={18} width="80%" sx={{ mb: 1 }} />
+        <Skeleton animation="wave" height={14} width="40%" sx={{ mb: 1 }} />
+        <Skeleton animation="wave" height={16} width="50%" />
+      </CardContent>
+      <CardActions sx={{ p: 1 }}>
+        <Skeleton animation="wave" height={36} width="100%" />
+      </CardActions>
+    </Card>
+  );
+};
 
 const ShopPage = () => {
   const location = useLocation();
@@ -18,7 +34,7 @@ const ShopPage = () => {
   const auth = useAuth();
   const isAuthenticated = auth.isAuthenticated && typeof auth.isAuthenticated === 'function' ? auth.isAuthenticated() : false;
 
-  const { addToCart, cart, refreshCart } = useCart();
+  const { addToCart, cart, loading: cartLoading, fetchCart } = useCart();
   const { enqueueSnackbar } = useSnackbar();
   
   // State
@@ -176,27 +192,44 @@ const ShopPage = () => {
   };
 
   const handleAddToCart = async (product) => {
+    if (!product.is_available || product.stock <= 0) {
+        enqueueSnackbar('Product is out of stock', { variant: 'error' });
+        return;
+    }
+
     try {
-        if (!product.is_in_stock) {
-            enqueueSnackbar('Product is out of stock', { variant: 'error' });
+        setAddingToCart((prev) => ({ ...prev, [product.id]: true }));
+        
+        // Get current cart state to check existing quantity
+        const cartResponse = await cartAPI.getCurrentCart();
+        const existingItem = cartResponse.data.items?.find(
+            item => item.product.id === product.id
+        );
+        const currentQuantity = existingItem ? existingItem.quantity : 0;
+
+        if ((currentQuantity + 1) > product.stock) {
+            enqueueSnackbar(
+                `Cannot add more. In cart: ${currentQuantity}, Stock: ${product.stock}`, 
+                { variant: 'warning' }
+            );
             return;
         }
-        
-        setAddingToCart((prev) => ({ ...prev, [product.id]: true }));
+
         await addToCart(product.id, 1);
         enqueueSnackbar('Product added to cart', { variant: 'success' });
         
-        // Update local product stock
-        setProducts((prevProducts) =>
-            prevProducts.map((p) =>
-                p.id === product.id ? { ...p, stock: p.stock - 1 } : p
-            )
-        );
+        // Use available refresh method
+        if (fetchCart) {
+            await fetchCart();
+        } else {
+            await refreshCart();
+        }
     } catch (error) {
         console.error('Error adding to cart:', error);
-        enqueueSnackbar(error.response?.data?.error || 'Failed to add product to cart', { 
-            variant: 'error' 
-        });
+        enqueueSnackbar(
+            error.response?.data?.error || 'Failed to add product to cart',
+            { variant: 'error' }
+        );
     } finally {
         setAddingToCart((prev) => ({ ...prev, [product.id]: false }));
     }
@@ -396,8 +429,8 @@ const ShopPage = () => {
                     step={1000}
                   />
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                    <Typography variant="body2">Ksh {priceRange[0].toLocaleString()}</Typography>
-                    <Typography variant="body2">Ksh {priceRange[1].toLocaleString()}</Typography>
+                    <Typography variant="body2">Ksh {priceRange[0].toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</Typography>
+                    <Typography variant="body2">Ksh {priceRange[1].toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</Typography>
                   </Box>
                 </Box>
               </ListItem>
@@ -422,12 +455,6 @@ const ShopPage = () => {
             </Box>
           </Box>
         </Drawer>
-
-        {loading && (
-          <Box display="flex" justifyContent="center" alignItems="center" minHeight="200px">
-            <CircularProgress />
-          </Box>
-        )}
 
         {error && (
           <Box textAlign="center" py={4}>
@@ -462,9 +489,13 @@ const ShopPage = () => {
         )}
 
         {loading ? (
-          <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
-            <CircularProgress />
-          </Box>
+          <Grid container spacing={2}>
+          {[...Array(12)].map((_, index) => (
+            <Grid item key={`skeleton-${index}`} xs={6} sm={4} md={3} lg={2}>
+              <ProductSkeleton />
+            </Grid>
+          ))}
+        </Grid>
         ) : error ? (
           <Box sx={{ textAlign: 'center', py: 5 }}>
             <Typography variant="h6" color="error" gutterBottom>
@@ -593,19 +624,19 @@ const ShopPage = () => {
                       {product.discount_price ? (
                         <>
                           <Typography variant="subtitle2" color="primary">
-                            Ksh{typeof product.discount_price === 'number' ? product.discount_price.toFixed(0) : product.discount_price}
+                            Ksh{typeof product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") === 'number' ? product.discount_price.toFixed(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                           </Typography>
                           <Typography
                             variant="caption"
                             color="error"
                             sx={{ ml: 0.5, textDecoration: 'line-through' }}
                           >
-                            Ksh{typeof product.price === 'number' ? product.price.toFixed(0) : product.price}
+                            Ksh{typeof product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") === 'number' ? product.price.toFixed(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                           </Typography>
                         </>
                       ) : (
                         <Typography variant="subtitle2" color="primary" fontWeight="medium">
-                          Ksh{typeof product.price === 'number' ? product.price.toFixed(0) : product.price}
+                          Ksh{typeof product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") === 'number' ? product.price.toFixed(0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",") : product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                         </Typography>
                       )}
                     </Box>

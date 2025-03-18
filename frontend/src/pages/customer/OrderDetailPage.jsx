@@ -167,9 +167,9 @@ const OrderDetailPage = () => {
                 {order.items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell>{item.product_name}</TableCell>
-                    <TableCell align="right">${parseFloat(item.price).toFixed(2)}</TableCell>
+                    <TableCell align="right">Ksh{parseFloat(item.price).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                     <TableCell align="right">{item.quantity}</TableCell>
-                    <TableCell align="right">${parseFloat(item.total).toFixed(2)}</TableCell>
+                    <TableCell align="right">Ksh{parseFloat(item.total).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}</TableCell>
                   </TableRow>
                 ))}
                 <TableRow>
@@ -177,7 +177,7 @@ const OrderDetailPage = () => {
                     Order Total:
                   </TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                    ${parseFloat(order.order_total).toFixed(2)}
+                    Ksh{parseFloat(order.order_total).toFixed(2).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                   </TableCell>
                 </TableRow>
               </TableBody>
