@@ -11,8 +11,9 @@ import Header from './components/layout/Header.jsx';
 import Footer from './components/layout/Footer.jsx';
 import { ErrorBoundary } from 'react-error-boundary';
 
-import { CookieProvider } from './contexts/CookieContext';
+import { CookieProvider } from './authentication/CookieContext';
 import CookieConsent from './components/CookieConsent';
+import { WishlistProvider } from './authentication/WishlistContext';
 
 // Simple error fallback component
 const ErrorFallback = ({ error, resetErrorBoundary }) => (
@@ -38,12 +39,14 @@ root.render(
           <CookieProvider>
             <AuthProvider>
               <CartProvider>
-                <SnackbarProvider maxSnack={3}>
-                  <Header />
-                  <App />
-                  <Footer />
-                  <CookieConsent />
-                </SnackbarProvider>
+                <WishlistProvider>
+                  <SnackbarProvider maxSnack={3}>
+                    <Header />
+                    <App />
+                    <Footer />
+                    <CookieConsent />
+                  </SnackbarProvider>
+                </WishlistProvider>
               </CartProvider>
             </AuthProvider>
           </CookieProvider>

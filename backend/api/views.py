@@ -46,14 +46,14 @@ from django_filters import rest_framework as django_filters
 from .permissions import IsAdminOrReadOnly
 from .utils import send_newsletter_confirmation, send_otp_email
 from .models import (Category, Product, Cart, CartItem, Order, OrderItem,
-    ProductImage
+    ProductImage, Wishlist
 )
 from .serializers import (
     OTPSerializer, PasswordChangeSerializer, UserLoginSerializer,
     UserRegistrationSerializer, UserProfileSerializer, CategorySerializer,
     ProductListSerializer, ProductDetailSerializer, CartSerializer,
     OrderSerializer, CheckoutSerializer,
-    NewsletterSubscriberSerializer
+    NewsletterSubscriberSerializer, WishlistSerializer
 )
 
 # Get the custom user model
@@ -348,6 +348,45 @@ class CategoryViewSet(viewsets.ModelViewSet):
         context['request'] = self.request
         return context
 
+    @action(detail=True, methods=['get'])
+    def products(self, request, slug=None):
+        try:
+            category = self.get_object()
+            queryset = Product.objects.filter(category=category)
+            
+            # Apply filters
+            search = request.query_params.get('search', '')
+            if search:
+                queryset = queryset.filter(
+                    Q(name__icontains=search) |
+                    Q(description__icontains=search)
+                )
+            
+            in_stock = request.query_params.get('in_stock', '')
+            if in_stock.lower() == 'true':
+                queryset = queryset.filter(stock__gt=0, is_available=True)
+            
+            price_min = request.query_params.get('price_min')
+            price_max = request.query_params.get('price_max')
+            if price_min:
+                queryset = queryset.filter(price__gte=price_min)
+            if price_max:
+                queryset = queryset.filter(price__lte=price_max)
+            
+            ordering = request.query_params.get('ordering', '')
+            if ordering:
+                queryset = queryset.order_by(ordering)
+            
+            page = self.paginate_queryset(queryset)
+            serializer = ProductListSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+            
+        except Category.DoesNotExist:
+            return Response(
+                {'error': 'Category not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+
 class ProductFilter(django_filters.FilterSet):
     price_min = django_filters.NumberFilter(field_name="price", lookup_expr='gte')
     price_max = django_filters.NumberFilter(field_name="price", lookup_expr='lte')
@@ -374,48 +413,18 @@ class ProductViewSet(viewsets.ModelViewSet):
     parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
-        queryset = Product.objects.all().prefetch_related('images')
+        queryset = Product.objects.all()
+        search = self.request.query_params.get('search', None)
         
-        # Log the query parameters
-        logger.debug(f"Query params: {self.request.query_params}")
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search) |
+                Q(description__icontains=search) |
+                Q(category__name__icontains=search)
+            )
         
-        # Apply price range filter
-        price_min = self.request.query_params.get('price_min')
-        price_max = self.request.query_params.get('price_max')
+        # ...rest of filtering logic...
         
-        if price_min:
-            queryset = queryset.filter(price__gte=price_min)
-        if price_max:
-            queryset = queryset.filter(price__lte=price_max)
-            
-        # Apply category filters (support both 'category' and 'category_slug' parameters)
-        category = self.request.query_params.get('category')
-        category_slug = self.request.query_params.get('category_slug')
-        
-        if category:
-            queryset = queryset.filter(category__slug=category)
-        if category_slug:
-            queryset = queryset.filter(category__slug=category_slug)
-            
-        # Apply in_stock filter
-        in_stock = self.request.query_params.get('in_stock')
-        if in_stock and in_stock.lower() == 'true':
-            queryset = queryset.filter(stock__gt=0, is_available=True)
-            
-        # Handle sorting
-        sort_param = self.request.query_params.get('ordering', None)
-        if sort_param:
-            if sort_param == 'price_asc':
-                queryset = queryset.order_by('price')
-            elif sort_param == 'price_desc':
-                queryset = queryset.order_by('-price')
-            elif sort_param == 'created_at':
-                queryset = queryset.order_by('-created_at')
-            elif sort_param == 'name':
-                queryset = queryset.order_by('name')
-                
-        # Log the final queryset
-        logger.debug(f"Final queryset count: {queryset.count()}")
         return queryset
 
     def get_permissions(self):
@@ -1192,3 +1201,70 @@ def delete_user_preference(request, preference_key):
         response.delete_cookie(cookie_key)
     
     return response
+
+# Add this to your existing views.py
+
+class WishlistViewSet(viewsets.ModelViewSet):
+    serializer_class = WishlistSerializer
+
+    def get_queryset(self):
+        if self.request.user.is_authenticated:
+            return Wishlist.objects.filter(user=self.request.user).select_related('product')
+        return Wishlist.objects.none()
+
+    @action(detail=False, methods=['get'])
+    def items(self, request):
+        queryset = self.get_queryset()
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['post'])
+    def toggle(self, request):
+        product_id = request.data.get('product_id')
+        if not product_id:
+            return Response({'error': 'Product ID is required'}, status=400)
+
+        try:
+            wishlist_item = Wishlist.objects.filter(
+                user=request.user,
+                product_id=product_id
+            ).first()
+
+            if wishlist_item:
+                wishlist_item.delete()
+                return Response({'status': 'removed'})
+            else:
+                Wishlist.objects.create(
+                    user=request.user,
+                    product_id=product_id
+                )
+                return Response({'status': 'added'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    @action(detail=False, methods=['post'])
+    def migrate(self, request):
+        if not request.user.is_authenticated:
+            return Response({'error': 'Authentication required'}, status=401)
+
+        session_id = request.data.get('session_id')
+        if not session_id:
+            return Response({'error': 'Session ID is required'}, status=400)
+
+        try:
+            # Move guest wishlist items to user's wishlist
+            guest_items = Wishlist.objects.filter(session_id=session_id)
+            for item in guest_items:
+                Wishlist.objects.get_or_create(
+                    user=request.user,
+                    product=item.product
+                )
+            guest_items.delete()
+            return Response({'status': 'migrated'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=400)
+
+    def get_permissions(self):
+        if self.action in ['items', 'toggle', 'migrate']:
+            return [IsAuthenticated()]
+        return super().get_permissions()

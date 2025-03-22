@@ -13,7 +13,7 @@ import logging
 from .models import (
     CustomUser, Category, Product, ProductImage, 
     Cart, CartItem, Order, OrderItem,
-    NewsletterSubscriber
+    NewsletterSubscriber, Wishlist
 )
 
 
@@ -440,3 +440,10 @@ class NewsletterSubscriberSerializer(serializers.ModelSerializer):
     class Meta:
         model = NewsletterSubscriber
         fields = ['email']
+
+class WishlistSerializer(serializers.ModelSerializer):
+    product = ProductListSerializer(read_only=True)
+    
+    class Meta:
+        model = Wishlist
+        fields = ['id', 'product', 'created_at']

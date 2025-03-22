@@ -1,5 +1,6 @@
 import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from "./constants";
+import { getCookie } from '../utils/cookieUtils';
 
 const apiUrl = "http://127.0.0.1:8000/api/";
 // Base URL with /api/ prefix to match Django router patterns
@@ -22,6 +23,27 @@ API.interceptors.request.use(
     return config;
   },
   (error) => Promise.reject(error)
+);
+
+// Update the API interceptor configuration
+API.interceptors.request.use(
+    (config) => {
+        try {
+            // Add CSRF token to headers if available
+            const csrfToken = getCookie('csrftoken');
+            if (csrfToken) {
+                config.headers['X-CSRFToken'] = csrfToken;
+            }
+        } catch (error) {
+            console.error('Error getting CSRF token:', error);
+        }
+        
+        // Add withCredentials for cookie handling
+        config.withCredentials = true;
+        
+        return config;
+    },
+    (error) => Promise.reject(error)
 );
 
 // Add token refresh queue to prevent multiple refresh requests
@@ -177,29 +199,13 @@ const productsAPI = {
   getProducts: (params = {}) => {
     const queryParams = new URLSearchParams();
     
-    // Add search param if exists
+    // Add all possible parameters
     if (params.search) queryParams.append('search', params.search);
-    
-    // Add category filter
     if (params.category) queryParams.append('category', params.category);
-    
-    // Add sorting
-    if (params.sort) queryParams.append('ordering', params.sort);
-    
-    // Add stock filter
-    if (params.inStock !== undefined) {
-        queryParams.append('inStock', params.inStock);
-    }
-    
-    // Add price range
-    if (params.price_min !== undefined) {
-        queryParams.append('price_min', params.price_min);
-    }
-    if (params.price_max !== undefined) {
-        queryParams.append('price_max', params.price_max);
-    }
-    
-    // Add pagination
+    if (params.ordering) queryParams.append('ordering', params.ordering);
+    if (params.in_stock) queryParams.append('in_stock', params.in_stock);
+    if (params.price_min) queryParams.append('price_min', params.price_min);
+    if (params.price_max) queryParams.append('price_max', params.price_max);
     if (params.page) queryParams.append('page', params.page);
     
     return API.get(`/products/?${queryParams.toString()}`);
@@ -319,10 +325,26 @@ const productsAPI = {
   subscribeNewsletter: (data) => {
     return API.post('/newsletter/subscribe/', data);
   },
+  getCategoryProducts: (slug, params = {}) => {
+    const queryParams = new URLSearchParams();
+    
+    if (params.search) queryParams.append('search', params.search);
+    if (params.ordering) queryParams.append('ordering', params.ordering);
+    if (params.in_stock) queryParams.append('in_stock', params.in_stock);
+    if (params.price_min) queryParams.append('price_min', params.price_min);
+    if (params.price_max) queryParams.append('price_max', params.price_max);
+    if (params.page) queryParams.append('page', params.page);
+    
+    return API.get(`/categories/${slug}/products/?${queryParams.toString()}`);
+  },
+  getCategory: (slug) => API.get(`/categories/${slug}/`),
 };
 
+//kong 
+//venture
+
 // Cart API Services
-export const cartAPI = {
+const cartAPI = {
   getCart: () => {
     const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
     return API.get('carts/current/', {
@@ -473,4 +495,22 @@ const adminAPI = {
   getDashboardData: () => API.get('/admin/dashboard/'),
 };
 
-export { API, authAPI, productsAPI, orderAPI, adminAPI };
+// Add to your existing API services
+
+const wishlistAPI = {
+  getWishlist: () => API.get('/wishlist/items/'),
+  toggleWishlist: (productId) => API.post('/wishlist/toggle/', { product_id: productId }),
+  migrateWishlist: (sessionId) => API.post('/wishlist/migrate/', { session_id: sessionId }),
+  checkWishlistItem: (productId) => API.get(`/wishlist/check/${productId}/`),
+};
+
+// Update the exports
+export { 
+    API, 
+    authAPI, 
+    productsAPI, 
+    cartAPI, 
+    wishlistAPI,
+    orderAPI,
+    adminAPI
+};

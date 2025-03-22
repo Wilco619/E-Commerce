@@ -8,7 +8,7 @@ router.register(r'products', views.ProductViewSet, basename='product')
 router.register(r'carts', views.CartViewSet, basename='cart')
 router.register(r'orders', views.OrderViewSet, basename='order')
 router.register(r'admin', views.AdminDashboardViewSet, basename='admin-dashboard')
-
+router.register(r'wishlist', views.WishlistViewSet, basename='wishlist')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -32,3 +32,5 @@ urlpatterns = [
     path('preferences/delete/<str:preference_key>/', views.delete_user_preference, name='delete_user_preference'),
     path('session/', views.set_user_session, name='set_user_session'),
 ]
+
+urlpatterns += router.urls

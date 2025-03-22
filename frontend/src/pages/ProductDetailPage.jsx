@@ -96,9 +96,9 @@ const ProductDetailPage = () => {
     } finally {
         setAddingToCart(false);
     }
-};
+  };
 
-const handleQuantityChange = (event) => {
+  const handleQuantityChange = (event) => {
     const newQuantity = parseInt(event.target.value);
     if (!isNaN(newQuantity)) {
         // Get current quantity in cart
@@ -120,7 +120,7 @@ const handleQuantityChange = (event) => {
             setQuantity(newQuantity);
         }
     }
-};
+  };
 
   const handleBuyNow = async () => {
     if (!cart) {
@@ -187,54 +187,60 @@ const handleQuantityChange = (event) => {
           <Skeleton variant="text" width="70%" height={30} />
         </Box>
         
-        <Grid container spacing={4}>
-          {/* Product Images Skeleton */}
-          <Grid item xs={12} md={6}>
-            <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-              <Skeleton variant="rectangular" width="100%" height={400} />
-              <Box sx={{ mt: 2 }}>
-                <Grid container spacing={1}>
-                  {[1, 2, 3, 4].map((item) => (
-                    <Grid item key={item} xs={3}>
-                      <Skeleton variant="rectangular" width="100%" height={80} />
+        <Box display="flex" justifyContent="center">
+          <Box width="90%" maxWidth="1100px">
+            <Grid container spacing={4}>
+              {/* Product Images Skeleton */}
+              <Grid item xs={12} md={6}>
+                <Paper elevation={2} sx={{ p: 2, mb: 2, width: '95%', mx: 'auto' }}>
+                  <Skeleton variant="rectangular" width="100%" height={350} />
+                  <Box sx={{ mt: 2 }}>
+                    <Grid container spacing={1}>
+                      {[1, 2, 3, 4].map((item) => (
+                        <Grid item key={item} xs={3}>
+                          <Skeleton variant="rectangular" width="90%" height={70} />
+                        </Grid>
+                      ))}
                     </Grid>
-                  ))}
-                </Grid>
-              </Box>
-            </Paper>
-          </Grid>
+                  </Box>
+                </Paper>
+              </Grid>
 
-          {/* Product Information Skeleton */}
-          <Grid item xs={12} md={6}>
-            <Skeleton variant="text" width="80%" height={60} />
-            <Skeleton variant="text" width="40%" height={50} sx={{ mb: 2 }} />
-            
-            <Box sx={{ mb: 3 }}>
-              <Skeleton variant="text" width="60%" height={30} />
-              <Skeleton variant="text" width="50%" height={30} />
-              <Skeleton variant="text" width="40%" height={30} />
-            </Box>
-            
-            <Divider sx={{ mb: 3 }} />
-            
-            <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-              <Skeleton variant="rectangular" width="100%" height={50} />
-              <Skeleton variant="rectangular" width="100%" height={50} />
-            </Box>
-            
-            <Skeleton variant="rectangular" width="50%" height={50} />
-          </Grid>
-        </Grid>
+              {/* Product Information Skeleton */}
+              <Grid item xs={12} md={6}>
+                <Box sx={{ width: '95%', mx: 'auto' }}>
+                  <Skeleton variant="text" width="80%" height={50} />
+                  <Skeleton variant="text" width="40%" height={40} sx={{ mb: 2 }} />
+                  
+                  <Box sx={{ mb: 3 }}>
+                    <Skeleton variant="text" width="60%" height={30} />
+                    <Skeleton variant="text" width="50%" height={30} />
+                    <Skeleton variant="text" width="40%" height={30} />
+                  </Box>
+                  
+                  <Divider sx={{ mb: 3 }} />
+                  
+                  <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
+                    <Skeleton variant="rectangular" width="100%" height={50} />
+                    <Skeleton variant="rectangular" width="100%" height={50} />
+                  </Box>
+                  
+                  <Skeleton variant="rectangular" width="50%" height={50} />
+                </Box>
+              </Grid>
+            </Grid>
 
-        {/* Tabs Skeleton */}
-        <Box sx={{ mt: 6 }}>
-          <Skeleton variant="rectangular" width="30%" height={40} sx={{ mb: 2 }} />
-          <Paper elevation={1} sx={{ p: 3 }}>
-            <Skeleton variant="text" width="100%" height={30} />
-            <Skeleton variant="text" width="100%" height={30} />
-            <Skeleton variant="text" width="80%" height={30} />
-            <Skeleton variant="text" width="90%" height={30} />
-          </Paper>
+            {/* Tabs Skeleton */}
+            <Box sx={{ mt: 5 }}>
+              <Skeleton variant="rectangular" width="30%" height={40} sx={{ mb: 2 }} />
+              <Paper elevation={1} sx={{ p: 3, width: '97%', mx: 'auto' }}>
+                <Skeleton variant="text" width="100%" height={30} />
+                <Skeleton variant="text" width="100%" height={30} />
+                <Skeleton variant="text" width="80%" height={30} />
+                <Skeleton variant="text" width="90%" height={30} />
+              </Paper>
+            </Box>
+          </Box>
         </Box>
       </Container>
     );
@@ -255,7 +261,7 @@ const handleQuantityChange = (event) => {
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3 }}>
+      <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3, pl: 2 }}>
         <Link component={RouterLink} to="/" color="inherit">
           Home
         </Link>
@@ -274,187 +280,195 @@ const handleQuantityChange = (event) => {
         <Typography color="text.primary">{product.name}</Typography>
       </Breadcrumbs>
 
-      <Grid container spacing={4}>
-        {/* Product Images */}
-        <Grid item xs={12} md={6}>
-          <Paper elevation={2} sx={{ p: 2, mb: 2 }}>
-            <Box
-              component="img"
-              src={selectedImage || '/placeholder-product.jpg'}
-              alt={product.name}
-              sx={{
-                width: '100%',
-                height: 400,
-                objectFit: 'contain',
-                mb: 2
-              }}
-            />
-            
-            {product.images && product.images.length > 1 && (
-              <Grid container spacing={1}>
-                {product.images.map((image) => (
-                  <Grid item key={image.id} xs={3}>
-                    <Box
-                      component="img"
-                      src={image.image}
-                      alt={`${product.name} thumbnail`}
-                      onClick={() => setSelectedImage(image.image)}
-                      sx={{
-                        width: '100%',
-                        height: 80,
-                        objectFit: 'cover',
-                        cursor: 'pointer',
-                        border: selectedImage === image.image ? '2px solid #1976d2' : '1px solid #ddd',
-                        borderRadius: 1
-                      }}
-                    />
+      <Box display="flex" justifyContent="center">
+        <Box width="92%" maxWidth="1100px">
+          <Grid container spacing={3}>
+            {/* Product Images */}
+            <Grid item xs={12} md={6}>
+              <Paper elevation={2} sx={{ p: 2, mb: 2, width: '95%', mx: 'auto' }}>
+                <Box
+                  component="img"
+                  src={selectedImage || '/placeholder-product.jpg'}
+                  alt={product.name}
+                  sx={{
+                    width: '100%',
+                    height: 350,
+                    objectFit: 'contain',
+                    mb: 2
+                  }}
+                />
+                
+                {product.images && product.images.length > 1 && (
+                  <Grid container spacing={1}>
+                    {product.images.map((image) => (
+                      <Grid item key={image.id} xs={3}>
+                        <Box
+                          component="img"
+                          src={image.image}
+                          alt={`${product.name} thumbnail`}
+                          onClick={() => setSelectedImage(image.image)}
+                          sx={{
+                            width: '90%',
+                            height: 70,
+                            objectFit: 'cover',
+                            cursor: 'pointer',
+                            border: selectedImage === image.image ? '2px solid #1976d2' : '1px solid #ddd',
+                            borderRadius: 1,
+                            mx: 'auto',
+                            display: 'block'
+                          }}
+                        />
+                      </Grid>
+                    ))}
                   </Grid>
-                ))}
-              </Grid>
-            )}
-          </Paper>
-        </Grid>
+                )}
+              </Paper>
+            </Grid>
 
-        {/* Product Information */}
-        <Grid item xs={12} md={6}>
-          <Typography variant="h4" component="h1" gutterBottom>
-            {product.name}
-          </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-            {product.discount_price ? (
-              <>
-                <Typography variant="h4" color="primary" sx={{ mr: 2 , fontSize: "1.7rem" }}>
-                  Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+            {/* Product Information */}
+            <Grid item xs={12} md={6}>
+              <Box sx={{ width: '95%', mx: 'auto' }}>
+                <Typography variant="h4" component="h1" gutterBottom>
+                  {product.name}
                 </Typography>
-                <Typography variant="h6" color="error" sx={{ textDecoration: 'line-through' }}>
-                  Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                </Typography>
-                <Typography variant="body1" color="error" sx={{ ml: 2 }}>
-                  {Math.round(((product.price - product.discount_price) / product.price) * 100)}% OFF
-                </Typography>
-              </>
-            ) : (
-              <Typography variant="h4">
-                Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-              </Typography>
-            )}
-          </Box>
-
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Category: <strong>{product.category}</strong>
-            </Typography>
-            
-            <Typography variant="body1" sx={{ mb: 1 }}>
-                Availability: 
-                <Box component="span" sx={{ 
-                    color: product.is_available && product.stock > 0 ? 'success.main' : 'error.main',
-                    fontWeight: 'bold',
-                    ml: 1
-                }}>
-                    {!product.is_available ? 'Not Available' :
-                        product.stock > 0 ? 
-                            product.stock <= 5 ? 
-                                `Low Stock (${product.stock} left)` : 
-                                'In Stock' 
-                            : 'Out of Stock'
-                    }
+                
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                  {product.discount_price ? (
+                    <>
+                      <Typography variant="h4" color="primary" sx={{ mr: 2, fontSize: "1.7rem" }}>
+                        Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      </Typography>
+                      <Typography variant="h6" color="error" sx={{ textDecoration: 'line-through' }}>
+                        Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                      </Typography>
+                      <Typography variant="body1" color="error" sx={{ ml: 2 }}>
+                        {Math.round(((product.price - product.discount_price) / product.price) * 100)}% OFF
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography variant="h4">
+                      Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    </Typography>
+                  )}
                 </Box>
-            </Typography>
 
-            {product.is_available && (
-                <Typography variant="body1" sx={{ 
-                    color: product.stock <= 5 ? 'warning.main' : 'text.primary',
-                    fontWeight: product.stock <= 5 ? 'medium' : 'regular'
-                }}>
-                    Stock: <strong>{product.stock}</strong> {product.stock === 1 ? 'item' : 'items'} available
-                </Typography>
-            )}
+                <Box sx={{ mb: 3 }}>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    Category: <strong>{product.category}</strong>
+                  </Typography>
+                  
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    Availability: 
+                    <Box component="span" sx={{ 
+                      color: product.is_available && product.stock > 0 ? 'success.main' : 'error.main',
+                      fontWeight: 'bold',
+                      ml: 1
+                    }}>
+                      {!product.is_available ? 'Not Available' :
+                        product.stock > 0 ? 
+                          product.stock <= 5 ? 
+                            `Low Stock (${product.stock} left)` : 
+                            'In Stock' 
+                          : 'Out of Stock'
+                      }
+                    </Box>
+                  </Typography>
 
-            {/* Show cart quantity if item exists in cart */}
-            {cart?.items?.find(item => item.product.id === product.id)?.quantity > 0 && (
-                <Typography variant="body1" sx={{ mt: 1, color: 'info.main' }}>
-                    Currently in cart: <strong>
+                  {product.is_available && (
+                    <Typography variant="body1" sx={{ 
+                      color: product.stock <= 5 ? 'warning.main' : 'text.primary',
+                      fontWeight: product.stock <= 5 ? 'medium' : 'regular'
+                    }}>
+                      Stock: <strong>{product.stock}</strong> {product.stock === 1 ? 'item' : 'items'} available
+                    </Typography>
+                  )}
+
+                  {/* Show cart quantity if item exists in cart */}
+                  {cart?.items?.find(item => item.product.id === product.id)?.quantity > 0 && (
+                    <Typography variant="body1" sx={{ mt: 1, color: 'info.main' }}>
+                      Currently in cart: <strong>
                         {cart.items.find(item => item.product.id === product.id).quantity}
-                    </strong>
+                      </strong>
+                    </Typography>
+                  )}
+                </Box>
+
+                <Divider sx={{ mb: 3 }} />
+
+                {/* Quantity and Add to Cart */}
+                {product.is_available && product.stock > 0 ? (
+                  <>
+                    <Box sx={{ display: 'flex', gap: 2, mb: 4, maxWidth: '90%' }}>
+                      <Button
+                        variant="contained"
+                        startIcon={<ShoppingCartIcon />}
+                        onClick={handleAddToCart}
+                        size="large"
+                        sx={{ py: 1.5, flex: 1 }}
+                        disabled={addingToCart}
+                      >
+                        {addingToCart ? 'Adding...' : 'Add to Cart'}
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        onClick={handleBuyNow}
+                        size="large"
+                        sx={{ py: 1.5, flex: 1 }}
+                        disabled={addingToCart}
+                      >
+                        {addingToCart ? 'Processing...' : 'Buy Now'}
+                      </Button>
+                    </Box>
+
+                    <Button 
+                      variant="contained" 
+                      color="primary"
+                      size="large"
+                      onClick={() => navigate('/')}
+                      sx={{ mt: 1, py: 1.5, width: '80%', maxWidth: 280 }}
+                    >
+                      Continue Shopping
+                    </Button>
+                  </>
+                ) : (
+                  <Alert severity="warning" sx={{ mb: 3, maxWidth: '90%' }}>
+                    This product is currently out of stock.
+                  </Alert>
+                )}
+              </Box>
+            </Grid>
+          </Grid>
+
+          {/* Product Description and Details Tabs */}
+          <Box sx={{ mt: 5 }}>
+            <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2, pl: 2 }}>
+              <Tab label="Description" />
+              <Tab label="Additional Information" />
+            </Tabs>
+
+            <Paper elevation={1} sx={{ p: 3, width: '97%', mx: 'auto' }}>
+              {activeTab === 0 && (
+                <Typography variant="body1" component="div" sx={{ whiteSpace: 'pre-line' }}>
+                  {product.description}
                 </Typography>
-            )}
+              )}
+              
+              {activeTab === 1 && (
+                <Box>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    <strong>SKU:</strong> {product.id}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    <strong>Added:</strong> {new Date(product.created_at).toLocaleDateString()}
+                  </Typography>
+                  <Typography variant="body1" sx={{ mb: 1 }}>
+                    <strong>Last Updated:</strong> {new Date(product.updated_at).toLocaleDateString()}
+                  </Typography>
+                </Box>
+              )}
+            </Paper>
+          </Box>
         </Box>
-
-          <Divider sx={{ mb: 3 }} />
-
-          {/* Quantity and Add to Cart */}
-          {product.is_available && product.stock > 0 ? (
-          <>
-            <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-              <Button
-                variant="contained"
-                startIcon={<ShoppingCartIcon />}
-                onClick={handleAddToCart}
-                size="large"
-                sx={{ py: 1.5, flex: 1 }}
-                disabled={addingToCart}
-              >
-                {addingToCart ? 'Adding...' : 'Add to Cart'}
-              </Button>
-              <Button
-                variant="outlined"
-                onClick={handleBuyNow}
-                size="large"
-                sx={{ py: 1.5, flex: 1 }}
-                disabled={addingToCart}
-              >
-                {addingToCart ? 'Processing...' : 'Buy Now'}
-              </Button>
-            </Box>
-
-            <Button 
-              variant="contained" 
-              color="primary"
-              size="large"
-              onClick={() => navigate('/')}
-              sx={{ mt: 2, py: 1.5, width: '100%', maxWidth: 300 }}
-            >
-              Continue Shopping
-            </Button>
-          </>
-        ) : (
-          <Alert severity="warning" sx={{ mb: 3 }}>
-            This product is currently out of stock.
-          </Alert>
-        )}
-        </Grid>
-      </Grid>
-
-      {/* Product Description and Details Tabs */}
-      <Box sx={{ mt: 6 }}>
-        <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2 }}>
-          <Tab label="Description" />
-          <Tab label="Additional Information" />
-        </Tabs>
-
-        <Paper elevation={1} sx={{ p: 3 }}>
-          {activeTab === 0 && (
-            <Typography variant="body1" component="div" sx={{ whiteSpace: 'pre-line' }}>
-              {product.description}
-            </Typography>
-          )}
-          
-          {activeTab === 1 && (
-            <Box>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>SKU:</strong> {product.id}
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Added:</strong> {new Date(product.created_at).toLocaleDateString()}
-              </Typography>
-              <Typography variant="body1" sx={{ mb: 1 }}>
-                <strong>Last Updated:</strong> {new Date(product.updated_at).toLocaleDateString()}
-              </Typography>
-            </Box>
-          )}
-        </Paper>
       </Box>
     </Container>
   );

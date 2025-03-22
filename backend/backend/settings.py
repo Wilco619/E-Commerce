@@ -251,8 +251,14 @@ MPESA_CONFIG = {
 #     }
 # }
 
+
+# Set the cookie age (in seconds) - 2 weeks default
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+# Session settings
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+
+SESSION_SAVE_EVERY_REQUEST = True
 # Update session configuration
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'  # Use database sessions
 # Cookie settings
 SESSION_COOKIE_SECURE = True  # Only send cookies over HTTPS
 CSRF_COOKIE_SECURE = True  # Only send CSRF cookie over HTTPS
@@ -261,13 +267,23 @@ CSRF_COOKIE_HTTPONLY = True  # Prevent JavaScript access to CSRF cookie
 SESSION_COOKIE_SAMESITE = 'Lax'  # Controls whether cookies are sent with cross-site requests
 CSRF_COOKIE_SAMESITE = 'Lax'  # Same as above for CSRF cookies
 
+# Add these new settings
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:5173',
+    'https://jemsa.co.ke',
+    'https://www.jemsa.co.ke',
+    # Add your production domains here
+]
+
+# Update CORS settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
+
 # If your site needs to embed resources from other domains or be embedded itself
 # you might need to adjust these settings:
 # SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 # CSRF_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
 
-# Set the cookie age (in seconds) - 2 weeks default
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 
 # If you need to support development environments
 if DEBUG:
@@ -309,3 +325,6 @@ LOGGING = {
 #0 */12 * * * /usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions >> /home/username/logs/session_cleanup.log 2>&1
 # Run every hour
 #0 * * * * /path/to/your/python /path/to/your/manage.py cleanup_guest_carts
+
+# Run cleanup every day at 3 AM
+#0 3 * * * /path/to/your/virtual/env/python /path/to/your/manage.py cleanup_guest_wishlists

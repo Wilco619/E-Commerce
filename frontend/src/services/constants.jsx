@@ -5,6 +5,7 @@ export const CART_TYPE = {
   GUEST: 'guest',
   AUTHENTICATED: 'authenticated'
 };
+export const GUEST_WISHLIST_ID = "guestWishlist";
 
 export const deliveryAreas = {
   'CBD Areas': [

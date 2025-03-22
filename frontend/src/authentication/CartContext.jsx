@@ -3,6 +3,7 @@ import { useSnackbar } from 'notistack';
 import { cartAPI } from '../services/api';
 import { useAuth } from './AuthContext';
 import { GUEST_SESSION_ID } from '../services/constants';
+import { getCookie } from '../utils/cookieUtils';
 
 export const CartContext = createContext(null);
 

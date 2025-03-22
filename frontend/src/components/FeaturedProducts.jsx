@@ -44,7 +44,6 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
             Products
           </Box>
         </Typography>
-
       </Box>
       
       {featuredProducts.length > 0 ? (
@@ -93,7 +92,7 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
           
           <Swiper
             modules={[Autoplay, Pagination, Navigation]}
-            spaceBetween={2}
+            spaceBetween={10} // Increased spacing between slides
             slidesPerView="auto"
             autoplay={{
               delay: 5000,
@@ -112,10 +111,11 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
               width: '100%'
             }}
             breakpoints={{
-              320: { slidesPerView: 2, spaceBetween: 2 },
-              480: { slidesPerView: 3, spaceBetween: 2 },
-              768: { slidesPerView: 4, spaceBetween: 2 },
-              1024: { slidesPerView: 5, spaceBetween: 2 }
+              320: { slidesPerView: 2.2, spaceBetween: 10 }, // Increased view to create spacing
+              480: { slidesPerView: 3.2, spaceBetween: 10 },
+              768: { slidesPerView: 4.2, spaceBetween: 10 },
+              1024: { slidesPerView: 5.2, spaceBetween: 10 },
+              1200: { slidesPerView: 6.2, spaceBetween: 10 } // Added larger breakpoint
             }}
           >
             {featuredProducts.map((product) => (
@@ -124,14 +124,28 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
                 style={{
                   height: 'auto',
                   display: 'flex',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  width: '85%' // Reduced width of slide
                 }}
               >
-                <ProductCard 
-                  product={product} 
-                  setSelectedImage={setSelectedImage}
-                  compact
-                />
+                <Box sx={{ 
+                  width: '100%', // Further constrain card width
+                  '& .MuiPaper-root': {
+                    width: '100%',
+                    height: '100%',
+                    transition: 'transform 0.2s, box-shadow 0.2s',
+                    '&:hover': {
+                      transform: 'translateY(-4px)',
+                      boxShadow: '0 6px 12px rgba(0,0,0,0.1)'
+                    }
+                  }
+                }}>
+                  <ProductCard 
+                    product={product} 
+                    setSelectedImage={setSelectedImage}
+                    compact
+                  />
+                </Box>
               </SwiperSlide>
             ))}
           </Swiper>

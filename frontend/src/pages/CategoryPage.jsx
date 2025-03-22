@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 
 import {
@@ -21,16 +21,93 @@ import {
   Paper,
   Skeleton,
   Tooltip, 
-  IconButton
+  IconButton,
+  TextField,
+  InputAdornment,
+  FormControl,
+  InputLabel,
+  Select,
+  MenuItem,
+  Slider
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import SearchIcon from '@mui/icons-material/Search';
+import CloseIcon from '@mui/icons-material/Close';
+import FilterListIcon from '@mui/icons-material/FilterList';
 import { productsAPI, cartAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../authentication/CartContext';
 import { useAuth } from '../authentication/AuthContext';
+
+// Update the filter section with simplified controls
+const FilterSection = ({ searchTerm, setSearchTerm, sortBy, setSortBy, priceRange, setPriceRange }) => (
+  <Paper elevation={1} sx={{ p: 2, mb: 4 }}>
+    <Grid container spacing={2} alignItems="center">
+      {/* Search Field */}
+      <Grid item xs={12} sm={6} md={4}>
+        <TextField
+          size="small"
+          fullWidth
+          variant="outlined"
+          placeholder="Search in this category..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+            endAdornment: searchTerm && (
+              <InputAdornment position="end">
+                <IconButton onClick={() => setSearchTerm('')} edge="end" size="small">
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Grid>
+
+      {/* Sort Field */}
+      <Grid item xs={12} sm={6} md={4}>
+        <FormControl fullWidth variant="outlined" size="small">
+          <InputLabel>Sort By</InputLabel>
+          <Select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            label="Sort By"
+          >
+            <MenuItem value="">Default</MenuItem>
+            <MenuItem value="price">Price: Low to High</MenuItem>
+            <MenuItem value="-price">Price: High to Low</MenuItem>
+            <MenuItem value="name">Name: A to Z</MenuItem>
+            <MenuItem value="-name">Name: Z to A</MenuItem>
+          </Select>
+        </FormControl>
+      </Grid>
+
+      {/* Price Range */}
+      <Grid item xs={12} md={4}>
+        <Typography variant="body2" color="text.secondary" gutterBottom>
+          Price Range: Ksh {priceRange[0].toLocaleString()} - Ksh {priceRange[1].toLocaleString()}
+        </Typography>
+        <Slider
+          value={priceRange}
+          onChange={(_, newValue) => setPriceRange(newValue)}
+          valueLabelDisplay="auto"
+          min={0}
+          max={50000}
+          step={1000}
+          valueLabelFormat={(value) => `Ksh ${value.toLocaleString()}`}
+        />
+      </Grid>
+    </Grid>
+  </Paper>
+);
 
 const CategoryPage = () => {
   const { slug } = useParams();
@@ -47,28 +124,74 @@ const CategoryPage = () => {
   const { addToCart, loading: cartLoading, fetchCart, cart } = useCart();
   const { isAuthenticated } = useAuth();
 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('');
+  const [priceRange, setPriceRange] = useState([0, 50000]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+
+  const sortOptions = [
+    { value: 'price', label: 'Price: Low to High' },
+    { value: '-price', label: 'Price: High to Low' },
+    { value: 'name', label: 'Name: A to Z' },
+    { value: '-name', label: 'Name: Z to A' },
+  ];
+
+  const fetchCategoryProducts = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = {
+        category: slug,
+        ...(searchTerm && { search: searchTerm }),
+        ...(sortBy && { ordering: sortBy }),
+        ...(priceRange[0] > 0 && { price_min: priceRange[0] }),
+        ...(priceRange[1] < 50000 && { price_max: priceRange[1] }),
+        page
+      };
+
+      const response = await productsAPI.getProducts(params);
+      setProducts(response.data.results || []);
+      setTotalPages(Math.ceil((response.data.count || 0) / 12));
+    } catch (error) {
+      setError('Failed to load category products');
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, searchTerm, sortBy, priceRange, page]);
+
+  const fetchCategoryData = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Fetch category details
+      const categoryResponse = await productsAPI.getCategory(slug);
+      setCategoryDetails(categoryResponse.data);
+
+      // Fetch category products with simplified filters
+      const params = {
+        ...(searchTerm && { search: searchTerm }),
+        ...(sortBy && { ordering: sortBy }),
+        ...(priceRange[0] > 0 && { price_min: priceRange[0] }),
+        ...(priceRange[1] < 50000 && { price_max: priceRange[1] }),
+        page
+      };
+
+      const productsResponse = await productsAPI.getCategoryProducts(slug, params);
+      setProducts(productsResponse.data.results || []);
+      setTotalPages(Math.ceil((productsResponse.data.count || 0) / 12));
+    } catch (error) {
+      console.error('Error fetching category data:', error);
+      setError('Failed to load category data');
+      enqueueSnackbar('Failed to load category data', { variant: 'error' });
+    } finally {
+      setLoading(false);
+    }
+  }, [slug, searchTerm, sortBy, priceRange, page, enqueueSnackbar]);
+
   useEffect(() => {
-    const fetchCategoryData = async () => {
-      try {
-        setLoading(true);
-        const [categoryResponse, productsResponse] = await Promise.all([
-          productsAPI.getCategory(slug),
-          productsAPI.getCategoryProducts(slug)
-        ]);
-
-        setCategoryDetails(categoryResponse.data);
-        setProducts(productsResponse.data.results || productsResponse.data);
-        
-      } catch (err) {
-        setError('Failed to load category. Please try again later.');
-        console.error('Error fetching category:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCategoryData();
-  }, [slug]);
+  }, [slug, fetchCategoryData]);
 
   const handleAddToCart = async (product) => {
     if (!product.is_available || product.stock <= 0) {
@@ -344,8 +467,8 @@ const CategoryPage = () => {
           <Skeleton variant="text" width="80%" height={25} />
         </Box>
         <Grid container spacing={3}>
-          {[1, 2, 3, 4, 5, 6].map((item) => (
-            <Grid item key={item} xs={6} sm={6} md={4} lg={4}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+            <Grid item key={item} xs={6} sm={6} md={4} lg={3} xl={2}>
               <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
               <Skeleton variant="text" height={30} sx={{ mt: 1 }} />
               <Skeleton variant="text" width="60%" height={25} />
@@ -453,6 +576,15 @@ const CategoryPage = () => {
         )}
       </Paper>
 
+      <FilterSection 
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        sortBy={sortBy}
+        setSortBy={setSortBy}
+        priceRange={priceRange}
+        setPriceRange={setPriceRange}
+      />
+
       {/* Product Grid */}
       {products.length > 0 ? (
         <Grid container spacing={3}>
@@ -460,10 +592,11 @@ const CategoryPage = () => {
             <Grid 
               item 
               key={product.id} 
-              xs={6} 
-              sm={6} 
-              md={4} 
-              lg={4}
+              xs={6}       // 2 cards per row on extra small screens (mobile)
+              sm={6}       // 2 cards per row on small screens (tablet portrait)
+              md={4}       // 3 cards per row on medium screens
+              lg={3}       // 4 cards per row on large screens
+              xl={2}       // 6 cards per row on extra large screens
               sx={{ display: 'flex' }}
             >
               {renderProductCard(product)}

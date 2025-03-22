@@ -493,6 +493,18 @@ class OrderItem(models.Model):
     def __str__(self):
         return f"{self.quantity} x {self.product.name}"
 
+class Wishlist(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True)
+    session_id = models.CharField(max_length=100, null=True, blank=True)
+    product = models.ForeignKey('Product', on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = [['user', 'product'], ['session_id', 'product']]
+        
+    def __str__(self):
+        return f"Wishlist item for {self.user or self.session_id}"
+
 class NewsletterSubscriber(models.Model):
     email = models.EmailField(unique=True)
     created_at = models.DateTimeField(auto_now_add=True)

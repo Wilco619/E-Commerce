@@ -15,6 +15,7 @@ import NotFoundPage from './pages/NotFoundPage';
 import OTPVerification from './pages/OTPVerification';
 import PasswordChange from './pages/PasswordChange';
 import ForgotPasswordPage from './pages/ForgotPasswordPage';
+import WishlistPage from './pages/WishlistPage';
 
 // Customer Pages
 import ProfilePage from './pages/customer/ProfilePage';
@@ -66,6 +67,7 @@ const AppRoutes = () => {
       <Route path="/verify-otp" element={<OTPVerification />} />
       <Route path="/password-change" element={<PasswordChange />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/wishlist" element={<WishlistPage />} />
       
       {/* Protected Customer Routes */}
       <Route element={<ProtectedRoute />}>

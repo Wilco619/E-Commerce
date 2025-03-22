@@ -9,6 +9,8 @@ import { useSnackbar } from 'notistack';
 import { productsAPI, cartAPI } from '../services/api';
 import { Search as SearchIcon, Close as CloseIcon, FilterList as FilterListIcon, AddShoppingCart as AddShoppingCartIcon, Favorite as FavoriteIcon, FavoriteBorder as FavoriteBorderIcon, NavigateNext as NavigateNextIcon } from '@mui/icons-material';
 import { Divider } from '@mui/material';
+import { useWishlist } from '../authentication/WishlistContext';
+import { GUEST_WISHLIST_ID } from '../services/constants';
 
 const ProductSkeleton = () => {
   return (
@@ -36,6 +38,7 @@ const ShopPage = () => {
 
   const { addToCart, cart, loading: cartLoading, fetchCart } = useCart();
   const { enqueueSnackbar } = useSnackbar();
+  const { isInWishlist, toggleWishlistItem } = useWishlist();
   
   // State
   const [products, setProducts] = useState([]);
@@ -43,7 +46,6 @@ const ShopPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [favorites, setFavorites] = useState([]);
   const [addingToCart, setAddingToCart] = useState({});
   
   // Filter State
@@ -67,47 +69,40 @@ const ShopPage = () => {
     };
 
     fetchCategories();
-    
-    // Load favorites from localStorage
-    const savedFavorites = localStorage.getItem('favorites');
-    if (savedFavorites) {
-      setFavorites(JSON.parse(savedFavorites));
-    }
   }, []);
+
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const query = searchParams.get('search');
+    if (query) {
+      setSearchTerm(query);
+    }
+  }, [location.search]);
 
   const fetchProducts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Only include parameters that have values
-      const params = {};
-      
-      if (searchTerm) params.search = searchTerm;
-      if (selectedCategory) params.category = selectedCategory;
-      if (sortBy) params.sortBy = sortBy;
-      if (inStockOnly) params.inStockOnly = inStockOnly;
-      if (priceRange[0] > 0) params.priceMin = priceRange[0];
-      if (priceRange[1] < 50000) params.priceMax = priceRange[1];
-      if (page > 1) params.page = page;
+      const params = {
+        ...(searchTerm && { search: searchTerm }),
+        ...(selectedCategory && { category: selectedCategory }),
+        ...(sortBy && { ordering: sortBy }), // Update this to match API
+        ...(inStockOnly && { in_stock: true }),
+        ...(priceRange[0] > 0 && { price_min: priceRange[0] }),
+        ...(priceRange[1] < 50000 && { price_max: priceRange[1] }),
+        ...(page > 1 && { page: page }),
+      };
 
-      console.log('Fetching products with params:', params);
       const response = await productsAPI.getProducts(params);
-      console.log('Products response:', response.data);
-
+      
       if (response.data) {
-        const productsData = response.data.results || response.data;
-        const totalItems = response.data.count || productsData.length;
-
-        setProducts(productsData);
-        setTotalPages(Math.ceil(totalItems / 12));
-      } else {
-        setProducts([]);
-        setTotalPages(0);
+        setProducts(response.data.results || []);
+        setTotalPages(Math.ceil((response.data.count || 0) / 12));
       }
     } catch (error) {
       console.error('Error fetching products:', error);
-      setError('Failed to load products. Please try again.');
+      setError('Failed to load products');
     } finally {
       setLoading(false);
     }
@@ -115,7 +110,7 @@ const ShopPage = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [fetchProducts]);
+  }, [fetchProducts, searchTerm]);
 
   // Update your sort handler to match the API expectations
   const handleSortChange = (event) => {
@@ -235,16 +230,33 @@ const ShopPage = () => {
     }
 };
 
-  const toggleFavorite = (productId) => {
-    let newFavorites;
-    if (favorites.includes(productId)) {
-      newFavorites = favorites.filter((id) => id !== productId);
+  // Add this helper function to handle guest wishlist
+  const handleGuestWishlist = (product) => {
+    const guestWishlist = JSON.parse(localStorage.getItem(GUEST_WISHLIST_ID) || '[]');
+    const isInList = guestWishlist.some(item => item.product.id === product.id);
+    
+    if (isInList) {
+      const newWishlist = guestWishlist.filter(item => item.product.id !== product.id);
+      localStorage.setItem(GUEST_WISHLIST_ID, JSON.stringify(newWishlist));
+      enqueueSnackbar('Removed from wishlist', { variant: 'info' });
     } else {
-      newFavorites = [...favorites, productId];
+      guestWishlist.push({
+        product: product,
+        created_at: new Date().toISOString()
+      });
+      localStorage.setItem(GUEST_WISHLIST_ID, JSON.stringify(guestWishlist));
+      enqueueSnackbar('Added to wishlist', { variant: 'success' });
     }
-    setFavorites(newFavorites);
-    localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
+
+  const sortOptions = [
+    { value: '', label: 'Default' },
+    { value: '-created_at', label: 'Newest First' },
+    { value: 'price', label: 'Price: Low to High' },
+    { value: '-price', label: 'Price: High to Low' },
+    { value: 'name', label: 'Name: A to Z' },
+    { value: '-name', label: 'Name: Z to A' },
+  ];
 
   return (
     <>
@@ -306,11 +318,11 @@ const ShopPage = () => {
                 onChange={handleSortChange}
                 label="Sort By"
               >
-                <MenuItem value="">Default</MenuItem>
-                <MenuItem value="created_at">Newest First</MenuItem>
-                <MenuItem value="price_asc">Price: Low to High</MenuItem>
-                <MenuItem value="price_desc">Price: High to Low</MenuItem>
-                <MenuItem value="name">Name: A to Z</MenuItem>
+                {sortOptions.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
               </Select>
             </FormControl>
           </Grid>
@@ -563,16 +575,24 @@ const ShopPage = () => {
                       top: 5,
                       right: 5,
                       bgcolor: 'background.paper',
-                      '&:hover': { bgcolor: 'background.paper' },
+                      '&:hover': { 
+                        bgcolor: 'rgba(255, 255, 255, 0.9)',
+                        transform: 'scale(1.1)'
+                      },
                       zIndex: 1,
-                      padding: 0.5
+                      padding: 0.5,
+                      transition: 'all 0.2s ease'
                     }}
-                    onClick={() => toggleFavorite(product.id)}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      toggleWishlistItem(product);
+                    }}
                   >
-                    {favorites.includes(product.id) ? (
-                      <FavoriteIcon color="error" fontSize="small" />
+                    {isInWishlist(product.id) ? (
+                      <FavoriteIcon sx={{ color: 'error.main' }} fontSize="small" />
                     ) : (
-                      <FavoriteBorderIcon fontSize="small" />
+                      <FavoriteBorderIcon sx={{ color: 'action.active' }} fontSize="small" />
                     )}
                   </IconButton>
                   

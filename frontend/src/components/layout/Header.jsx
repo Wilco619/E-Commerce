@@ -6,7 +6,9 @@ import { useSession } from '../../authentication/SessionContext';
 import { useSnackbar } from 'notistack';
 import { API } from "../../services/api";
 import { ACCESS_TOKEN } from '../../services/constants';
-
+import FavoriteIcon from '@mui/icons-material/Favorite';
+import { useWishlist } from '../../authentication/WishlistContext';
+  
 // MUI Components
 import {
   AppBar,
@@ -32,6 +34,9 @@ import {
   Fade,
   ListItemButton,
   Skeleton,
+  Dialog,
+  TextField,
+  InputAdornment,
 } from '@mui/material';
 
 // MUI Icons
@@ -53,6 +58,19 @@ import {
 // Theme
 import { useTheme } from '@mui/material/styles';
 
+// Add this at the top of your file after imports
+const pulseKeyframes = {
+  '0%': {
+    transform: 'scale(1)',
+  },
+  '50%': {
+    transform: 'scale(1.2)',
+  },
+  '100%': {
+    transform: 'scale(1)',
+  },
+};
+
 const ModernHeader = ({ toggleTheme, isDarkMode }) => {
 
   const auth = useAuth();
@@ -73,6 +91,14 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
   const { enqueueSnackbar } = useSnackbar();
   const navigate = useNavigate();
   
+  // Add wishlist context
+  const { wishlistItems } = useWishlist();
+
+  // Add wishlist count calculation
+  const wishlistCount = useMemo(() => {
+    return wishlistItems?.length || 0;
+  }, [wishlistItems]);
+
   // State
   const [skeletonLoading, setSkeletonLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -148,14 +174,15 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
   }, [loading, cartLoading]);
 
   // Handle search
-  const handleSearch = useCallback((e) => {
+  const handleSearch = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/shop?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
       setSearchOpen(false);
+      toggleMobileMenu(); // Close mobile menu if open
     }
-  }, [navigate, searchQuery]);
+  };
 
   // Calculate cart items count
   const cartItemsCount = useMemo(() => {
@@ -418,6 +445,23 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
           </ListItemIcon>
           <ListItemText primary="Cart" />
         </ListItemButton>
+
+        <ListItemButton 
+          onClick={() => navigateTo('/wishlist')}
+          selected={isActive('/wishlist')}
+        >
+          <ListItemIcon>
+            <Badge badgeContent={wishlistCount} color="error">
+              <FavoriteIcon 
+                sx={{
+                  color: isActive('/wishlist') ? 'primary.main' : 'inherit',
+                  animation: wishlistCount > 0 ? `${pulseKeyframes} 1.5s infinite` : 'none',
+                }}
+              />
+            </Badge>
+          </ListItemIcon>
+          <ListItemText primary="Wishlist" />
+        </ListItemButton>
       </List>
       
       <Divider />
@@ -475,6 +519,46 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
         </Typography>
       </Box>
     </Drawer>
+  );
+
+  // Render search dialog
+  const renderSearchDialog = (
+    <Dialog
+      open={searchOpen}
+      onClose={() => setSearchOpen(false)}
+      fullScreen={isMobile}
+      PaperProps={{
+        sx: {
+          width: '100%',
+          maxWidth: '600px',
+          borderRadius: isMobile ? 0 : 2
+        }
+      }}
+    >
+      <Box component="form" onSubmit={handleSearch} sx={{ p: 2 }}>
+        <TextField
+          autoFocus
+          fullWidth
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search products..."
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon />
+              </InputAdornment>
+            ),
+            endAdornment: searchQuery && (
+              <InputAdornment position="end">
+                <IconButton size="small" onClick={() => setSearchQuery('')}>
+                  <CloseIcon />
+                </IconButton>
+              </InputAdornment>
+            ),
+          }}
+        />
+      </Box>
+    </Dialog>
   );
 
   return (
@@ -619,6 +703,45 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
                 </Badge>
               </IconButton>
             </Tooltip>
+
+            {/* Wishlist */}
+            <Tooltip title="Wishlist">
+              <IconButton 
+                color="inherit" 
+                component={RouterLink} 
+                to="/wishlist" 
+                aria-label={`Wishlist with ${wishlistCount} items`}
+                sx={{ 
+                  ml: 1,
+                  '& .MuiSvgIcon-root': wishlistCount > 0 ? {
+                    animation: `${pulseKeyframes} 1.5s infinite`,
+                    color: 'error.main'
+                  } : {}
+                }}
+              >
+                <Badge 
+                  badgeContent={skeletonLoading ? undefined : wishlistCount} 
+                  color="error"
+                >
+                  {skeletonLoading ? (
+                    <Box position="relative" display="inline-flex">
+                      <FavoriteIcon />
+                      <Box
+                        position="absolute"
+                        top={-5}
+                        right={-5}
+                        width={16}
+                        height={16}
+                      >
+                        <Skeleton variant="circular" width={16} height={16} />
+                      </Box>
+                    </Box>
+                  ) : (
+                    <FavoriteIcon />
+                  )}
+                </Badge>
+              </IconButton>
+            </Tooltip>
             
             {/* Profile/Account */}
             {isAuthenticated ? (
@@ -675,6 +798,9 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
       
       {/* Profile Menu */}
       {renderProfileMenu}
+
+      {/* Search Dialog */}
+      {renderSearchDialog}
     </>
   );
 };
