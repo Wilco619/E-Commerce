@@ -320,7 +320,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         return Category.objects.annotate(
             product_count=Count('products', filter=Q(products__is_available=True))
-        )
+        ).prefetch_related('products__images')  # Add this line to prefetch images
 
     def destroy(self, request, *args, **kwargs):
         try:
@@ -352,7 +352,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
     def products(self, request, slug=None):
         try:
             category = self.get_object()
-            queryset = Product.objects.filter(category=category)
+            queryset = Product.objects.filter(category=category)\
+                .prefetch_related('images')\
+                .select_related('category')\
+                .order_by('id')  # Add default ordering by id
             
             # Apply filters
             search = request.query_params.get('search', '')
@@ -363,7 +366,7 @@ class CategoryViewSet(viewsets.ModelViewSet):
                 )
             
             in_stock = request.query_params.get('in_stock', '')
-            if in_stock.lower() == 'true':
+            if (in_stock.lower() == 'true'):
                 queryset = queryset.filter(stock__gt=0, is_available=True)
             
             price_min = request.query_params.get('price_min')
@@ -373,18 +376,43 @@ class CategoryViewSet(viewsets.ModelViewSet):
             if price_max:
                 queryset = queryset.filter(price__lte=price_max)
             
+            # Apply custom ordering if specified, otherwise keep default
             ordering = request.query_params.get('ordering', '')
             if ordering:
                 queryset = queryset.order_by(ordering)
             
             page = self.paginate_queryset(queryset)
-            serializer = ProductListSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+            
+            # Add debug logging
+            logger.debug(f"Number of products found: {queryset.count()}")
+            logger.debug(f"Image URLs: {[p.images.all() for p in page]}")
+            
+            # Add context to include request for full image URLs
+            context = {'request': request}
+            serializer = ProductListSerializer(page, many=True, context=context)
+            
+            response = self.get_paginated_response(serializer.data)
+            
+            # Add category details to response
+            response.data['category'] = {
+                'id': category.id,
+                'name': category.name,
+                'slug': category.slug,
+                'description': category.description
+            }
+            
+            return response
             
         except Category.DoesNotExist:
             return Response(
                 {'error': 'Category not found'}, 
                 status=status.HTTP_404_NOT_FOUND
+            )
+        except Exception as e:
+            logger.error(f"Error in category products: {str(e)}")
+            return Response(
+                {'error': str(e)}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
 class ProductFilter(django_filters.FilterSet):

@@ -208,7 +208,7 @@ const HomePage = () => {
   if (error) return <Error message={error} />;
 
   return (
-    <Box sx={{ width: '100%', overflow: 'hidden' }}>
+    <Box sx={{ width: '100%', overflow: '' }}>
       <Container maxWidth={false} disableGutters>
         <Box 
           sx={{ 

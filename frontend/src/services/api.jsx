@@ -223,13 +223,13 @@ const productsAPI = {
       throw error;
     });
   },
-  getCategoryProducts: (categorySlug) => {
-    return API.get(`/products/`, {
-      params: {
-        category_slug: categorySlug  // Change this parameter name to match your backend
-      }
-    });
-  },
+  // getCategoryProducts: (categorySlug) => {
+  //   return API.get(`/products/`, {
+  //     params: {
+  //       category_slug: categorySlug  // Change this parameter name to match your backend
+  //     }
+  //   });
+  // },
   getPopularProducts: () => {
     return API.get('/products/popular/').then(response => {
       // Handle the new response structure that includes count
@@ -337,7 +337,7 @@ const productsAPI = {
     
     return API.get(`/categories/${slug}/products/?${queryParams.toString()}`);
   },
-  getCategory: (slug) => API.get(`/categories/${slug}/`),
+  
 };
 
 //kong 

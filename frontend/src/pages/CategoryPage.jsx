@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link as RouterLink } from 'react-router-dom';
 
 import {
@@ -21,93 +21,16 @@ import {
   Paper,
   Skeleton,
   Tooltip, 
-  IconButton,
-  TextField,
-  InputAdornment,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Slider
+  IconButton
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import VisibilityIcon from '@mui/icons-material/Visibility';
-import SearchIcon from '@mui/icons-material/Search';
-import CloseIcon from '@mui/icons-material/Close';
-import FilterListIcon from '@mui/icons-material/FilterList';
 import { productsAPI, cartAPI } from '../services/api';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../authentication/CartContext';
 import { useAuth } from '../authentication/AuthContext';
-
-// Update the filter section with simplified controls
-const FilterSection = ({ searchTerm, setSearchTerm, sortBy, setSortBy, priceRange, setPriceRange }) => (
-  <Paper elevation={1} sx={{ p: 2, mb: 4 }}>
-    <Grid container spacing={2} alignItems="center">
-      {/* Search Field */}
-      <Grid item xs={12} sm={6} md={4}>
-        <TextField
-          size="small"
-          fullWidth
-          variant="outlined"
-          placeholder="Search in this category..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          InputProps={{
-            startAdornment: (
-              <InputAdornment position="start">
-                <SearchIcon fontSize="small" />
-              </InputAdornment>
-            ),
-            endAdornment: searchTerm && (
-              <InputAdornment position="end">
-                <IconButton onClick={() => setSearchTerm('')} edge="end" size="small">
-                  <CloseIcon fontSize="small" />
-                </IconButton>
-              </InputAdornment>
-            ),
-          }}
-        />
-      </Grid>
-
-      {/* Sort Field */}
-      <Grid item xs={12} sm={6} md={4}>
-        <FormControl fullWidth variant="outlined" size="small">
-          <InputLabel>Sort By</InputLabel>
-          <Select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            label="Sort By"
-          >
-            <MenuItem value="">Default</MenuItem>
-            <MenuItem value="price">Price: Low to High</MenuItem>
-            <MenuItem value="-price">Price: High to Low</MenuItem>
-            <MenuItem value="name">Name: A to Z</MenuItem>
-            <MenuItem value="-name">Name: Z to A</MenuItem>
-          </Select>
-        </FormControl>
-      </Grid>
-
-      {/* Price Range */}
-      <Grid item xs={12} md={4}>
-        <Typography variant="body2" color="text.secondary" gutterBottom>
-          Price Range: Ksh {priceRange[0].toLocaleString()} - Ksh {priceRange[1].toLocaleString()}
-        </Typography>
-        <Slider
-          value={priceRange}
-          onChange={(_, newValue) => setPriceRange(newValue)}
-          valueLabelDisplay="auto"
-          min={0}
-          max={50000}
-          step={1000}
-          valueLabelFormat={(value) => `Ksh ${value.toLocaleString()}`}
-        />
-      </Grid>
-    </Grid>
-  </Paper>
-);
 
 const CategoryPage = () => {
   const { slug } = useParams();
@@ -124,74 +47,28 @@ const CategoryPage = () => {
   const { addToCart, loading: cartLoading, fetchCart, cart } = useCart();
   const { isAuthenticated } = useAuth();
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [sortBy, setSortBy] = useState('');
-  const [priceRange, setPriceRange] = useState([0, 50000]);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-
-  const sortOptions = [
-    { value: 'price', label: 'Price: Low to High' },
-    { value: '-price', label: 'Price: High to Low' },
-    { value: 'name', label: 'Name: A to Z' },
-    { value: '-name', label: 'Name: Z to A' },
-  ];
-
-  const fetchCategoryProducts = useCallback(async () => {
-    try {
-      setLoading(true);
-      const params = {
-        category: slug,
-        ...(searchTerm && { search: searchTerm }),
-        ...(sortBy && { ordering: sortBy }),
-        ...(priceRange[0] > 0 && { price_min: priceRange[0] }),
-        ...(priceRange[1] < 50000 && { price_max: priceRange[1] }),
-        page
-      };
-
-      const response = await productsAPI.getProducts(params);
-      setProducts(response.data.results || []);
-      setTotalPages(Math.ceil((response.data.count || 0) / 12));
-    } catch (error) {
-      setError('Failed to load category products');
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, searchTerm, sortBy, priceRange, page]);
-
-  const fetchCategoryData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      // Fetch category details
-      const categoryResponse = await productsAPI.getCategory(slug);
-      setCategoryDetails(categoryResponse.data);
-
-      // Fetch category products with simplified filters
-      const params = {
-        ...(searchTerm && { search: searchTerm }),
-        ...(sortBy && { ordering: sortBy }),
-        ...(priceRange[0] > 0 && { price_min: priceRange[0] }),
-        ...(priceRange[1] < 50000 && { price_max: priceRange[1] }),
-        page
-      };
-
-      const productsResponse = await productsAPI.getCategoryProducts(slug, params);
-      setProducts(productsResponse.data.results || []);
-      setTotalPages(Math.ceil((productsResponse.data.count || 0) / 12));
-    } catch (error) {
-      console.error('Error fetching category data:', error);
-      setError('Failed to load category data');
-      enqueueSnackbar('Failed to load category data', { variant: 'error' });
-    } finally {
-      setLoading(false);
-    }
-  }, [slug, searchTerm, sortBy, priceRange, page, enqueueSnackbar]);
-
   useEffect(() => {
+    const fetchCategoryData = async () => {
+      try {
+        setLoading(true);
+        const [categoryResponse, productsResponse] = await Promise.all([
+          productsAPI.getCategory(slug),
+          productsAPI.getCategoryProducts(slug)
+        ]);
+
+        setCategoryDetails(categoryResponse.data);
+        setProducts(productsResponse.data.results || productsResponse.data);
+        
+      } catch (err) {
+        setError('Failed to load category. Please try again later.');
+        console.error('Error fetching category:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchCategoryData();
-  }, [slug, fetchCategoryData]);
+  }, [slug]);
 
   const handleAddToCart = async (product) => {
     if (!product.is_available || product.stock <= 0) {
@@ -236,7 +113,7 @@ const CategoryPage = () => {
     
     return (
       <Card 
-        elevation={2}
+        elevation={3} // Increased elevation for better visibility
         sx={{ 
           height: '100%', 
           display: 'flex', 
@@ -244,10 +121,11 @@ const CategoryPage = () => {
           transition: 'transform 0.2s, box-shadow 0.2s',
           '&:hover': {
             transform: 'translateY(-4px)',
-            boxShadow: 6,
+            boxShadow: 8, // Increased shadow on hover
           },
           borderRadius: 2,
-          overflow: 'hidden'
+          overflow: 'hidden',
+          border: `1px solid ${theme.palette.divider}` // Added border for better definition
         }}
       >
         <Box sx={{ position: 'relative' }}>
@@ -261,59 +139,69 @@ const CategoryPage = () => {
                 top: 12,
                 right: 12,
                 fontWeight: 'bold',
-                zIndex: 2
+                zIndex: 2,
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)' // Added shadow to chip
               }}
             />
           )}
           
-          {product.feature_image ? (
-            <CardMedia
-              component="img"
-              height="220"
-              image={product.feature_image}
-              alt={product.name}
-              sx={{ 
-                objectFit: 'contain',
-                p: 2,
-                backgroundColor: 'grey.50',
-                textAlign: isMobile ? 'center' : 'initial',
-                display: 'flex',
-                justifyContent: isMobile ? 'center' : 'initial'
-              }}
-            />
-          ) : (
-            <Box 
-              sx={{ 
-                height: 220, 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center',
-                bgcolor: 'grey.50'
-              }}
-            >
-              <ShoppingBagIcon sx={{ fontSize: 60, color: 'grey.300' }} />
-            </Box>
-          )}  
+          <Box
+            sx={{
+              height: 240, // Increased height for better visibility
+              backgroundColor: 'grey.50',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              overflow: 'hidden',
+              borderBottom: `1px solid ${theme.palette.divider}`
+            }}
+          >
+            {product.feature_image ? (
+              <CardMedia
+                component="img"
+                height="220"
+                image={product.feature_image}
+                alt={product.name}
+                sx={{ 
+                  objectFit: 'contain',
+                  width: '85%', // Control width to prevent stretching
+                  maxHeight: '220px',
+                  margin: '0 auto',
+                  transition: 'transform 0.3s',
+                  '&:hover': {
+                    transform: 'scale(1.05)'
+                  }
+                }}
+              />
+            ) : (
+              <ShoppingBagIcon sx={{ fontSize: 80, color: 'grey.300' }} />
+            )}
+          </Box>
+        </Box>
+  
+        <CardContent sx={{ flexGrow: 1, p: 2, pt: 2 }}>
           <Typography 
             gutterBottom 
             variant="h6" 
             component="h2" 
             sx={{ 
-              fontWeight: 500,
+              fontWeight: 600, // Increased font weight for better visibility
               fontSize: '1.1rem',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
               display: '-webkit-box',
               WebkitLineClamp: 2,
               WebkitBoxOrient: 'vertical',
-              lineHeight: 1.2,
-              height: '2.4em'
+              lineHeight: 1.3,
+              height: '2.6em',
+              color: theme.palette.text.primary, // Ensure good contrast
+              mb: 1.5 // Add more space after title
             }}
           >
             {product.name}
           </Typography>
           
-          <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1, mt: 2 }}>
+          <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1.5 }}>
             {product.discount_price ? (
               <>
                 <Typography 
@@ -321,8 +209,8 @@ const CategoryPage = () => {
                   color="primary" 
                   sx={{ 
                     fontWeight: 'bold', 
-                    mr: 1,
-                    fontSize: isMobile ? '0.95rem' : 'inherit'
+                    mr: 1.5, // More spacing between prices
+                    fontSize: isMobile ? '1.1rem' : '1.25rem' // Larger font size
                   }}
                 >
                   Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -332,7 +220,7 @@ const CategoryPage = () => {
                   color="text.secondary" 
                   sx={{ 
                     textDecoration: 'line-through',
-                    fontSize: isMobile ? '0.75rem' : '0.875rem'
+                    fontSize: isMobile ? '0.85rem' : '0.95rem'
                   }}
                 >
                   Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -344,7 +232,7 @@ const CategoryPage = () => {
                 color="primary" 
                 sx={{ 
                   fontWeight: 'bold',
-                  fontSize: isMobile ? '0.95rem' : 'inherit'
+                  fontSize: isMobile ? '1.1rem' : '1.25rem'
                 }}
               >
                 Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
@@ -352,29 +240,62 @@ const CategoryPage = () => {
             )}
           </Box>
           
-          <Box sx={{ mt: 1 }}>
+          <Box 
+            sx={{ 
+              mt: 1,
+              mb: 1,
+              display: 'flex',
+              alignItems: 'center',
+              height: '24px' // Fixed height for stock status
+            }}
+          >
             {isOutOfStock ? (
               <Chip 
                 label="Out of Stock" 
                 color="error" 
                 size="small"
-                sx={{ borderRadius: 1 }}
+                sx={{ 
+                  borderRadius: 1,
+                  fontWeight: 500
+                }}
               />
             ) : isLowStock ? (
-              <Typography variant="body2" color="warning.main" sx={{ fontWeight: 500 }}>
+              <Typography 
+                variant="body2" 
+                color="warning.main" 
+                sx={{ 
+                  fontWeight: 600,
+                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.1)' : 'rgba(237, 108, 2, 0.1)',
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: 1,
+                  display: 'inline-block'
+                }}
+              >
                 Only {product.stock} left
               </Typography>
             ) : (
-              <Typography variant="body2" color="success.main" sx={{ fontWeight: 500 }}>
+              <Typography 
+                variant="body2" 
+                color="success.main" 
+                sx={{ 
+                  fontWeight: 600,
+                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.1)' : 'rgba(46, 125, 50, 0.1)',
+                  px: 1,
+                  py: 0.5,
+                  borderRadius: 1,
+                  display: 'inline-block'
+                }}
+              >
                 In Stock
               </Typography>
             )}
           </Box>
-        </Box>
+        </CardContent>
         
         <CardActions sx={{ px: 2, pb: 2, pt: 0, gap: 1 }}>
           {isMobile ? (
-            // Mobile view - icon only buttons
+            // Mobile view - improved icon buttons
             <>
               <Tooltip title="View Details">
                 <IconButton
@@ -385,6 +306,7 @@ const CategoryPage = () => {
                     flexGrow: 1,
                     border: `1px solid ${theme.palette.primary.main}`,
                     borderRadius: 1.5,
+                    height: '40px' // Fixed height for buttons
                   }}
                 >
                   <VisibilityIcon />
@@ -401,6 +323,7 @@ const CategoryPage = () => {
                       backgroundColor: 'primary.main',
                       color: 'primary.contrastText',
                       borderRadius: 1.5,
+                      height: '40px', // Fixed height for buttons
                       '&:hover': {
                         backgroundColor: 'primary.dark',
                       },
@@ -416,11 +339,11 @@ const CategoryPage = () => {
               </Tooltip>
             </>
           ) : (
-            // Desktop view - text + icon buttons
+            // Desktop view - improved text + icon buttons
             <>
               <Button 
                 variant="outlined"
-                size="small" 
+                size="medium" // Changed from small to medium
                 startIcon={<VisibilityIcon />}
                 component={RouterLink} 
                 to={`/product/${product.slug}`}
@@ -428,14 +351,15 @@ const CategoryPage = () => {
                   flexGrow: 1,
                   borderRadius: 1.5,
                   textTransform: 'none',
-                  fontWeight: 500
+                  fontWeight: 600, // Increased weight
+                  py: 1 // Added padding
                 }}
               >
                 View Details
               </Button>
               <Button
                 variant="contained"
-                size="small"
+                size="medium" // Changed from small to medium
                 startIcon={<AddShoppingCartIcon />}
                 onClick={() => handleAddToCart(product)}
                 disabled={!canAddToCart || cartLoading}
@@ -443,7 +367,8 @@ const CategoryPage = () => {
                   flexGrow: 1,
                   borderRadius: 1.5,
                   textTransform: 'none',
-                  fontWeight: 500
+                  fontWeight: 600, // Increased weight
+                  py: 1 // Added padding
                 }}
               >
                 {cartLoading ? 'Adding...' : 'Add to Cart'}
@@ -467,8 +392,8 @@ const CategoryPage = () => {
           <Skeleton variant="text" width="80%" height={25} />
         </Box>
         <Grid container spacing={3}>
-          {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
-            <Grid item key={item} xs={6} sm={6} md={4} lg={3} xl={2}>
+          {[1, 2, 3, 4, 5, 6].map((item) => (
+            <Grid item key={item} xs={6} sm={6} md={4} lg={4}>
               <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
               <Skeleton variant="text" height={30} sx={{ mt: 1 }} />
               <Skeleton variant="text" width="60%" height={25} />
@@ -576,15 +501,6 @@ const CategoryPage = () => {
         )}
       </Paper>
 
-      <FilterSection 
-        searchTerm={searchTerm}
-        setSearchTerm={setSearchTerm}
-        sortBy={sortBy}
-        setSortBy={setSortBy}
-        priceRange={priceRange}
-        setPriceRange={setPriceRange}
-      />
-
       {/* Product Grid */}
       {products.length > 0 ? (
         <Grid container spacing={3}>
@@ -592,11 +508,10 @@ const CategoryPage = () => {
             <Grid 
               item 
               key={product.id} 
-              xs={6}       // 2 cards per row on extra small screens (mobile)
-              sm={6}       // 2 cards per row on small screens (tablet portrait)
-              md={4}       // 3 cards per row on medium screens
-              lg={3}       // 4 cards per row on large screens
-              xl={2}       // 6 cards per row on extra large screens
+              xs={6} 
+              sm={6} 
+              md={4} 
+              lg={4}
               sx={{ display: 'flex' }}
             >
               {renderProductCard(product)}
