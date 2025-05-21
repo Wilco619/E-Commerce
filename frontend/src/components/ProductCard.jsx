@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, CardMedia, CardContent, Typography, Box, CardActions, Button, IconButton } from '@mui/material';
+import { Card, CardMedia, CardContent, Typography, Box, CardActions, Button, IconButton, Skeleton } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import ShoppingBagIcon from '@mui/icons-material/ShoppingBag';
 import FavoriteIcon from '@mui/icons-material/Favorite';
@@ -8,6 +8,7 @@ import { useWishlist } from '../authentication/WishlistContext';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import { useAuth } from '../authentication/AuthContext';
 import { useSnackbar } from 'notistack';
+import { useInView } from 'react-intersection-observer';
 
 const GUEST_WISHLIST_ID = 'guest_wishlist';
 
@@ -16,6 +17,10 @@ const ProductCard = ({ product, selectedImage, setSelectedImage, compact, onAddT
   const { isAuthenticated } = useAuth();
   const { enqueueSnackbar } = useSnackbar();
   const [isToggling, setIsToggling] = useState(false);
+  const { ref, inView } = useInView({
+    triggerOnce: true, // Load the image only once when it comes into view
+    threshold: 0.1,    // Trigger when 10% of the image is visible
+  });
 
   const handleWishlistClick = async (e) => {
     e.preventDefault();
@@ -80,12 +85,18 @@ const ProductCard = ({ product, selectedImage, setSelectedImage, compact, onAddT
         component={RouterLink}
         to={`/product/${product.slug}`}
       >
-        <CardMedia
-          component="img"
-          height={compact ? "120" : "200"} // Keep the same height
-          image={selectedImage || product.feature_image || '/placeholder-product.jpg'}
-          alt={product.name}
-        />
+        <div ref={ref}>
+          {inView ? (
+            <CardMedia
+              component="img"
+              height={compact ? "120" : "200"} // Keep the same height
+              image={selectedImage || product.feature_image || '/placeholder-product.jpg'}
+              alt={product.name}
+            />
+          ) : (
+            <Skeleton variant="rectangular" height={compact ? '120' : '200'} />
+          )}
+        </div>
         {product.discount_price && (
           <Box
             sx={{

@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../services/constants';
 import PreLoader from '../components/PreLoader';
+// import { useCart } from './CartContext';
 
 const AuthContext = createContext(null);
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
+  // const [refreshCart]= useCart();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -142,7 +144,6 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       const response = await authAPI.login(credentials);
       
-      // If we get tokens directly (no OTP required)
       if (response.data.access && response.data.refresh) {
         // Store tokens
         localStorage.setItem(ACCESS_TOKEN, response.data.access);
@@ -151,30 +152,17 @@ export const AuthProvider = ({ children }) => {
         // Get user data
         const userResponse = await authAPI.getCurrentUser();
         const userData = userResponse.data;
-        const isUserAdmin = userData.is_staff || userData.user_type === 'ADMIN';
         
         // Update state synchronously
         setUser(userData);
         setIsAuthenticated(true);
-        setIsAdmin(isUserAdmin);
+        setIsAdmin(userData.is_staff || userData.user_type === 'ADMIN');
         
-        // Update ref state and broadcast
-        authStateRef.current = {
-          isAuthenticated: true,
-          isAdmin: isUserAdmin,
-          userId: userData.id
-        };
-        
-        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT, { 
-          detail: authStateRef.current
-        }));
-        
-        // Handle redirect
-        const redirectPath = sessionStorage.getItem('redirectAfterLogin') || '/';
-        navigate(redirectPath);
+        // Trigger state change event
+        window.dispatchEvent(new CustomEvent('auth-state-changed'));
         
         return { success: true, requiresOTP: false };
-      } 
+      }
       // OTP flow
       else if (response.data.user_id) {
         sessionStorage.setItem('user_id', response.data.user_id);
@@ -198,59 +186,41 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const verifyOTP = async (otp, userId) => {
+  const verifyOTP = async (otpData) => {
     try {
       setVerifyingOTP(true);
-      setLoading(true);
+      const response = await authAPI.verifyOTP(otpData);
       
-      const response = await authAPI.verifyOTP({ otp, user_id: userId });
-      
-      if (response.data.success) {
-        // Store the tokens
-        localStorage.setItem(ACCESS_TOKEN, response.data.access);
-        localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
+      if (response.data.access && response.data.refresh) {
+        // Store tokens
+        localStorage.setItem('access_token', response.data.access);
+        localStorage.setItem('refresh_token', response.data.refresh);
         
         // Update auth state
-        const userData = response.data.user;
-        const isUserAdmin = userData.is_staff || userData.user_type === 'ADMIN';
+        const userData = response.data.user || (await authAPI.getCurrentUser()).data;
+        await handleLoginSuccess(userData);
         
-        // Update state immediately, before navigation
-        setUser(userData);
-        setIsAuthenticated(true);
-        setIsAdmin(isUserAdmin);
-        
-        // Update ref state
-        authStateRef.current = {
-          isAuthenticated: true,
-          isAdmin: isUserAdmin,
-          userId: userData.id
-        };
-        
-        // Broadcast change
-        window.dispatchEvent(new CustomEvent(AUTH_STATE_CHANGED_EVENT, { 
-          detail: authStateRef.current
-        }));
-        
-        // Reset loading states
-        setVerifyingOTP(false);
-        setLoading(false);
-        
-        // Navigate after state is updated
-        const redirectPath = sessionStorage.getItem('redirectAfterLogin') || '/';
-        navigate(redirectPath);
+        // Reset verification state
+        setVerificationState({
+          needsOTP: false,
+          userId: null
+        });
         
         return { success: true };
-      } else {
-        throw new Error(response.data.message || 'OTP verification failed');
       }
-    } catch (error) {
-      console.error('OTP verification failed:', error);
-      setVerifyingOTP(false);
-      setLoading(false);
+      
       return { 
         success: false, 
-        error: error.response?.data?.message || error.message || 'Verification failed'
+        error: 'Invalid response from server' 
       };
+    } catch (error) {
+      console.error('OTP verification failed:', error);
+      return { 
+        success: false, 
+        error: error.response?.data?.error || 'Verification failed' 
+      };
+    } finally {
+      setVerifyingOTP(false);
     }
   };
 
@@ -323,22 +293,35 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const handleLoginSuccess = useCallback((userData) => {
-    // Update auth state
-    setUser(userData);
-    setIsAuthenticated(true);
-    setIsAdmin(userData.user_type === 'ADMIN');
+  const handleLoginSuccess = useCallback(async (userData) => {
+    try {
+        // First update auth state
+        setUser(userData);
+        setIsAuthenticated(true);
+        setIsAdmin(userData.user_type === 'ADMIN');
 
-    // Handle post-login redirect
-    const redirectPath = sessionStorage.getItem('redirectAfterLogin');
-    if (redirectPath) {
-      sessionStorage.removeItem('redirectAfterLogin');
-      sessionStorage.removeItem('checkoutAttempted');
-      navigate(redirectPath);
-    } else {
-      navigate('/');
+        // Then fetch fresh user data
+        await refreshUserProfile();
+        
+        // Then refresh cart data
+        // await refreshCart();
+
+        // Dispatch auth state change event
+        window.dispatchEvent(new Event('auth-state-changed'));
+
+        // Handle post-login redirect
+        const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+        if (redirectPath) {
+            sessionStorage.removeItem('redirectAfterLogin');
+            navigate(redirectPath);
+        } else {
+            navigate('/');
+        }
+    } catch (error) {
+        console.error('Error during login success handling:', error);
+        enqueueSnackbar('Error refreshing user data', { variant: 'error' });
     }
-  }, [navigate]);
+}, [navigate, refreshUserProfile]);
 
   // Make auth state available to API interceptors
   useEffect(() => {

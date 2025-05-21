@@ -15,6 +15,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
+
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -33,7 +34,7 @@ SECRET_KEY = 'django-insecure-4d3kde!!&dy9ehyn13u00y$v*cg1+=f$7k3*)rnc1-0=2y0)as
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke']
+# ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke','api.jemsa.co.ke','www.api.jemsa.co.ke']
 ALLOWED_HOSTS = ['*']
 
 
@@ -193,8 +194,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 CORS_ALLOW_ALL_ORIGINS = True 
 
 CORS_ALLOWED_ORIGINS = [
-    # "https://shop.jemsa.co.ke",
-    # "https://www.shop.jemsa.co.ke",
+    # "https://jemsa.co.ke",
+    # "https://www.jemsa.co.ke",
     "http://localhost:5173",  
     
 ]
@@ -202,15 +203,42 @@ CORS_ALLOWED_ORIGINS = [
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Email settings
+# Email Configuration
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
-EMAIL_USE_TLS = True
-EMAIL_USE_SSL = False
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'wmilcinovic01@gmail.com')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'lymm owce yjah bkit')
+EMAIL_HOST = os.getenv('EMAIL_HOST')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT'))
+EMAIL_USE_TLS = True  # Hard-code this to True since we're using port 587
+EMAIL_USE_SSL = False  # Hard-code this to False since we're using TLS
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+EMAIL_SUBJECT_PREFIX = '[Jemsa Techs] '                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
+# Enhanced email logging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+        'mail_admins': {
+            'level': 'ERROR',
+            'class': 'django.utils.log.AdminEmailHandler',
+        }
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+        'django.mail': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        }
+    }
+}
 
 # OTP settings
 SEND_OTP_VIA_EMAIL = os.getenv('SEND_OTP_VIA_EMAIL', True)  # Set this to True to send OTPs via email
@@ -269,9 +297,9 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # Same as above for CSRF cookies
 
 # Add these new settings
 CSRF_TRUSTED_ORIGINS = [
+    # 'https://jemsa.co.ke',
+    # 'https://www.jemsa.co.ke',
     'http://localhost:5173',
-    'https://jemsa.co.ke',
-    'https://www.jemsa.co.ke',
     # Add your production domains here
 ]
 
@@ -302,23 +330,6 @@ SESSION_DB_ALIAS = 'default'
 SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
-
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-    },
-    'loggers': {
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-    },
-}
 
 #crontab -e
 #/usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions

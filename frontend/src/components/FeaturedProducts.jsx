@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Box, Typography, useTheme } from '@mui/material';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay, Pagination, Navigation } from 'swiper/modules';
@@ -7,8 +7,14 @@ import KeyboardArrowLeft from '@mui/icons-material/KeyboardArrowLeft';
 import KeyboardArrowRight from '@mui/icons-material/KeyboardArrowRight';
 import IconButton from '@mui/material/IconButton';
 
-const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, setSelectedImage }) => {
-  const theme = useTheme(); // Moved inside the component
+const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) => {
+  const theme = useTheme();
+  // Create refs for navigation
+  const prevRef = useRef(null);
+  const nextRef = useRef(null);
+  
+  // Ensure we have an array, even if products is null or undefined
+  const featuredProducts = Array.isArray(products) ? products : [];
 
   return (
     <Box sx={{ 
@@ -36,7 +42,7 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
             letterSpacing: 0.5,
             display: 'flex',
             alignItems: 'center',
-            fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' } // Adjust sizes
+            fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' }
           }}
         >
           Featured
@@ -92,7 +98,7 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
           
           <Swiper
             modules={[Autoplay, Pagination, Navigation]}
-            spaceBetween={10} // Increased spacing between slides
+            spaceBetween={10}
             slidesPerView="auto"
             autoplay={{
               delay: 5000,
@@ -105,17 +111,24 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
               prevEl: prevRef.current,
               nextEl: nextRef.current,
             }}
+            onBeforeInit={(swiper) => {
+              // Update Swiper with navigation elements when Swiper is initialized
+              if (swiper.params.navigation) {
+                swiper.params.navigation.prevEl = prevRef.current;
+                swiper.params.navigation.nextEl = nextRef.current;
+              }
+            }}
             style={{ 
               padding: '10px 0 30px',
               display: 'flex',
               width: '100%'
             }}
             breakpoints={{
-              320: { slidesPerView: 2.2, spaceBetween: 10 }, // Increased view to create spacing
+              320: { slidesPerView: 2.2, spaceBetween: 10 },
               480: { slidesPerView: 3.2, spaceBetween: 10 },
               768: { slidesPerView: 4.2, spaceBetween: 10 },
               1024: { slidesPerView: 5.2, spaceBetween: 10 },
-              1200: { slidesPerView: 6.2, spaceBetween: 10 } // Added larger breakpoint
+              1200: { slidesPerView: 6.2, spaceBetween: 10 }
             }}
           >
             {featuredProducts.map((product) => (
@@ -125,11 +138,11 @@ const FeaturedProducts = ({ featuredProducts, isSmallScreen, prevRef, nextRef, s
                   height: 'auto',
                   display: 'flex',
                   justifyContent: 'center',
-                  width: '85%' // Reduced width of slide
+                  width: '85%'
                 }}
               >
                 <Box sx={{ 
-                  width: '100%', // Further constrain card width
+                  width: '100%',
                   '& .MuiPaper-root': {
                     width: '100%',
                     height: '100%',

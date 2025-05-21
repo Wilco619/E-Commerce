@@ -49,3 +49,17 @@ def send_otp_email(email, otp):
     except Exception as e:
         logger.error(f"Failed to send OTP email to {email}: {str(e)}")
         return False
+
+def test_email_settings():
+    try:
+        send_mail(
+            'Test Email',
+            'This is a test email from your Django application.',
+            settings.DEFAULT_FROM_EMAIL,
+            [settings.DEFAULT_FROM_EMAIL],
+            fail_silently=False,
+        )
+        return True, "Email test successful"
+    except Exception as e:
+        logger.error(f"Email test failed: {str(e)}")
+        return False, str(e)

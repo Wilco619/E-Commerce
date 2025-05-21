@@ -13,8 +13,15 @@ import SalesOverview from './SalesOverview';
 import ProductPerformance from './ProductPerformance';
 import CategoryDistribution from './CategoryDistribution';
 import StatsCard from './StatsCard';
+import { useAuth } from '../../authentication/AuthContext';
 
 const AdminDashboard = () => {
+  const { isAdmin, user } = useAuth();
+  
+  useEffect(() => {
+    console.log('Admin Dashboard - Auth state:', { isAdmin, user });
+  }, [isAdmin, user]);
+
   const [loading, setLoading] = useState(true);
   const [dashboardData, setDashboardData] = useState({
     sales_overview: [],
@@ -23,12 +30,30 @@ const AdminDashboard = () => {
   });
   const navigate = useNavigate();
 
+  // Add stats state
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalProducts: 0,
+    lowStockProducts: 0,
+    growthRate: 0,
+  });
+
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
         const response = await adminAPI.getDashboardData();
         setDashboardData(response.data);
+        
+        // Update stats
+        setStats({
+          totalOrders: response.data.total_orders || 0,
+          totalRevenue: response.data.total_revenue || 0,
+          totalProducts: response.data.total_products || 0,
+          lowStockProducts: response.data.low_stock_products || 0,
+          growthRate: response.data.growth_rate || 0,
+        });
       } catch (error) {
         console.error('Error fetching dashboard data:', error);
       } finally {
@@ -104,6 +129,38 @@ const AdminDashboard = () => {
           </MenuItem>
         </>
 
+        {/* Stats Cards */}
+        <Grid container spacing={3} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatsCard
+              title="Total Orders"
+              value={stats.totalOrders}
+              growth={stats.growthRate}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatsCard
+              title="Revenue"
+              value={`KES ${stats.totalRevenue.toLocaleString()}`}
+              growth={stats.growthRate}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatsCard
+              title="Products"
+              value={stats.totalProducts}
+              lowStock={stats.lowStockProducts}
+            />
+          </Grid>
+          <Grid item xs={12} sm={6} md={3}>
+            <StatsCard
+              title="Growth Rate"
+              value={`${stats.growthRate}%`}
+              growth={stats.growthRate}
+            />
+          </Grid>
+        </Grid>
+
         <StatsCard/>
       <Grid container spacing={3}>
         <Grid item xs={12}>
@@ -113,7 +170,10 @@ const AdminDashboard = () => {
           <ProductPerformance data={dashboardData.product_performance} loading={loading} />
         </Grid>
         <Grid item xs={12} md={6}>
-          <CategoryDistribution data={dashboardData.category_distribution} loading={loading} />
+          <CategoryDistribution 
+            data={dashboardData.category_distribution || []} 
+            loading={loading}
+          />
         </Grid>
       </Grid>
     </Container>

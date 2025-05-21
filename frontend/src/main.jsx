@@ -24,9 +24,14 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
   </div>
 );
 
-// Create custom event for header refreshing
+// Update the refresh header function
 export const refreshHeader = () => {
-  window.dispatchEvent(new Event('auth-state-changed'));
+  const event = new CustomEvent('auth-state-changed', {
+    detail: {
+      timestamp: Date.now()
+    }
+  });
+  window.dispatchEvent(event);
 };
 
 const root = createRoot(document.getElementById('root'));
@@ -35,22 +40,22 @@ root.render(
   <StrictMode>
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       <BrowserRouter>
-        <SessionProvider>
-          <CookieProvider>
+        <SnackbarProvider maxSnack={3}>
+          <SessionProvider>
             <AuthProvider>
               <CartProvider>
                 <WishlistProvider>
-                  <SnackbarProvider maxSnack={3}>
+                  <CookieProvider>
                     <Header />
                     <App />
                     <Footer />
                     <CookieConsent />
-                  </SnackbarProvider>
+                  </CookieProvider>
                 </WishlistProvider>
               </CartProvider>
             </AuthProvider>
-          </CookieProvider>
-        </SessionProvider>
+          </SessionProvider>
+        </SnackbarProvider>
       </BrowserRouter>
     </ErrorBoundary>
   </StrictMode>

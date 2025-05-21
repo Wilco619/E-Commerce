@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Box, 
   Paper, 
-  Typography 
+  Typography, 
+  CircularProgress 
 } from '@mui/material';
 import { 
   BarChart, 
@@ -15,15 +16,10 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 
-const SalesOverview = ({ timeRange }) => {
-  const salesData = [
-    { name: 'Jan', orders: 400, revenue: 24000 },
-    { name: 'Feb', orders: 300, revenue: 18500 },
-    { name: 'Mar', orders: 500, revenue: 31000 },
-    { name: 'Apr', orders: 450, revenue: 28000 },
-    { name: 'May', orders: 470, revenue: 29500 },
-    { name: 'Jun', orders: 600, revenue: 37000 },
-  ];
+const SalesOverview = ({ data, loading, timeRange }) => {
+  if (loading) {
+    return <CircularProgress />;
+  }
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }) => {
@@ -65,7 +61,7 @@ const SalesOverview = ({ timeRange }) => {
       <Box sx={{ height: 350, mt: 3 }}>
         <ResponsiveContainer width="100%" height="100%">
           <BarChart
-            data={salesData}
+            data={data}
             margin={{
               top: 5,
               right: 30,

@@ -15,14 +15,8 @@ import {
   ResponsiveContainer 
 } from 'recharts';
 
-const ProductPerformance = () => {
-  const productPerformanceData = [
-    { name: 'Product A', sales: 120, profit: 1800, returns: 5 },
-    { name: 'Product B', sales: 95, profit: 2200, returns: 2 },
-    { name: 'Product C', sales: 86, profit: 1100, returns: 8 },
-    { name: 'Product D', sales: 79, profit: 950, returns: 3 },
-    { name: 'Product E', sales: 65, profit: 780, returns: 1 },
-  ];
+const ProductPerformance = ({ data }) => {
+  if (!data) return null;
 
   // Custom tooltip
   const CustomTooltip = ({ active, payload, label }) => {
@@ -64,7 +58,7 @@ const ProductPerformance = () => {
       <Box sx={{ height: 350, mt: 3 }}>
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={productPerformanceData}
+            data={data}
             margin={{
               top: 5,
               right: 30,

@@ -1,18 +1,24 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { Box, Container, Typography, Card, CardContent, Skeleton } from '@mui/material';
+import { Box, Container, Skeleton, Card, CardContent } from '@mui/material';
 import { productsAPI } from '../services/api';
 import { useCart } from '../authentication/CartContext';
 import { useAuth } from '../authentication/AuthContext';
+import Error from '../components/Error';
+import { useInView } from 'react-intersection-observer';
 
-// Import components
+// Import components directly instead of using lazy loading
 import HeroSection from '../components/HeroSection';
 import FeaturedProducts from '../components/FeaturedProducts';
 import PopularProducts from '../components/PopularProducts';
 import Newsletter from '../components/Newsletter';
-import Error from '../components/Error';
 import CategorySection from '../components/CategorySection';
+
+// Skeleton loader for fallback
+const LazyLoader = ({ height = 300 }) => (
+  <Skeleton variant="rectangular" width="100%" height={height} animation="wave" />
+);
 
 // Create skeleton components for each section
 const HeroSectionSkeleton = () => (
@@ -126,7 +132,23 @@ const NewsletterSkeleton = () => (
   </Box>
 );
 
-// Main component with skeleton loading
+/**
+ * LazyLoadComponent: A wrapper for lazy loading components using Intersection Observer
+ */
+const LazyLoadComponent = ({ children, height = 400, skeleton }) => {
+  const { ref, inView } = useInView({
+    triggerOnce: true, // Load the component only once when it comes into view
+    threshold: 0.1, // Trigger when 10% of the component is visible
+  });
+  
+  return (
+    <div ref={ref}>
+      {inView ? children : skeleton || <LazyLoader height={height} />}
+    </div>
+  );
+};
+
+// Main component with intersection observer-based lazy loading
 const HomePage = () => {
   const theme = useTheme();
   const isSmallScreen = useMediaQuery(theme.breakpoints.down('md'));
@@ -142,73 +164,56 @@ const HomePage = () => {
   const verifyingOTP = auth?.verifyingOTP || false;
   const cartLoading = cart?.loading || false;
 
-  // Combine loading states
-  const isLoading = loading || authLoading || cartLoading || verifyingOTP;
-
   // State management
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [popularProducts, setPopularProducts] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [selectedImage, setSelectedImage] = useState(null);
   
   // Add specific state for categories loading
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState(null);
-  
-  // Refs for Swiper navigation
-  const prevFeaturedRef = useRef(null);
-  const nextFeaturedRef = useRef(null);
 
   useEffect(() => {
     const fetchHomePageData = async () => {
       try {
         setLoading(true);
         
-        // Separate categories fetch for better error handling
+        // Fetch all data in parallel
         try {
-          setCategoriesLoading(true);
-          const response = await productsAPI.getCategories();
-          console.log('Raw categories response:', response);
+          const [featuredResponse, popularResponse, categoriesResponse] = await Promise.all([
+            productsAPI.getFeaturedProducts(),
+            productsAPI.getPopularProducts(),
+            productsAPI.getCategories()
+          ]);
           
-          // Ensure we're setting an array
-          const categoriesData = Array.isArray(response.data) ? response.data : 
-                               response.data?.results || [];
-          console.log('Processed categories data:', categoriesData);
+          setFeaturedProducts(featuredResponse.data);
+          setPopularProducts(popularResponse.data);
+          
+          // Ensure we're setting an array for categories
+          const categoriesData = Array.isArray(categoriesResponse.data) ? categoriesResponse.data : 
+                               categoriesResponse.data?.results || [];
           
           setCategories(categoriesData);
         } catch (error) {
-          console.error('Error fetching categories:', error);
-          setCategoriesError('Failed to load categories');
-        } finally {
-          setCategoriesLoading(false);
+          console.error('Error fetching data:', error);
+          setError('Failed to load content');
         }
-
-        // Fetch other data
-        const [featuredResponse, popularResponse] = await Promise.all([
-          productsAPI.getFeaturedProducts(),
-          productsAPI.getPopularProducts()
-        ]);
-
-        setFeaturedProducts(featuredResponse.data);
-        setPopularProducts(popularResponse.data);
       } catch (err) {
         console.error('Error fetching homepage data:', err);
         setError('Failed to load content');
       } finally {
         setLoading(false);
+        setCategoriesLoading(false);
       }
     };
 
     fetchHomePageData();
   }, [auth.user, cart.cartId]);
 
-  // Remove the session storage reload effect
-  // This was causing unnecessary page refreshes
-  
   if (error) return <Error message={error} />;
 
   return (
-    <Box sx={{ width: '100%', overflow: '' }}>
+    <Box sx={{ width: '100%', overflow: 'hidden' }}>
       <Container maxWidth={false} disableGutters>
         <Box 
           sx={{ 
@@ -221,45 +226,45 @@ const HomePage = () => {
             }
           }}
         >
-          {isLoading ? (
-            <>
-              <HeroSectionSkeleton />
-              <FeaturedProductsSkeleton isSmallScreen={isSmallScreen} />
-              <CategorySkeleton />
-              <PopularProductsSkeleton isSmallScreen={isSmallScreen} />
-              <NewsletterSkeleton />
-            </>
-          ) : (
-            <>
-              <HeroSection isSmallScreen={isSmallScreen} />
-              
-              <FeaturedProducts 
-                featuredProducts={featuredProducts}
-                isSmallScreen={isSmallScreen}
-                prevRef={prevFeaturedRef}
-                nextRef={nextFeaturedRef}
-                setSelectedImage={setSelectedImage}
-              />
-              
-              {categoriesLoading ? (
-                <CategorySkeleton />
-              ) : categoriesError ? (
-                <Error message={categoriesError} />
-              ) : (
-                <CategorySection 
-                  categories={categories} 
-                  isSmallScreen={isSmallScreen}
-                />
-              )}
-              
-              <PopularProducts 
-                popularProducts={popularProducts} 
-                isSmallScreen={isSmallScreen} 
-              />
-              
-              <Newsletter />
-            </>
-          )}
+          {/* Hero Section */}
+          <LazyLoadComponent 
+            height={500} 
+            skeleton={<HeroSectionSkeleton />}
+          >
+            <HeroSection />
+          </LazyLoadComponent>
+
+          {/* Featured Products */}
+          <LazyLoadComponent 
+            height={400} 
+            skeleton={<FeaturedProductsSkeleton isSmallScreen={isSmallScreen} />}
+          >
+            <FeaturedProducts products={featuredProducts} />
+          </LazyLoadComponent>
+
+          {/* Categories */}
+          <LazyLoadComponent 
+            height={200} 
+            skeleton={<CategorySkeleton />}
+          >
+            <CategorySection categories={categories} />
+          </LazyLoadComponent>
+
+          {/* Popular Products */}
+          <LazyLoadComponent 
+            height={400} 
+            skeleton={<PopularProductsSkeleton isSmallScreen={isSmallScreen} />}
+          >
+            <PopularProducts products={popularProducts} />
+          </LazyLoadComponent>
+
+          {/* Newsletter */}
+          <LazyLoadComponent 
+            height={200} 
+            skeleton={<NewsletterSkeleton />}
+          >
+            <Newsletter />
+          </LazyLoadComponent>
         </Box>
       </Container>
     </Box>

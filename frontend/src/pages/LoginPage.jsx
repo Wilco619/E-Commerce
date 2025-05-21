@@ -19,13 +19,15 @@ import { Visibility, VisibilityOff, LockOutlined } from '@mui/icons-material';
 import { authAPI } from '../services/api';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../services/constants';
 import { useAuth } from '../authentication/AuthContext';
-import { useSnackbar } from 'notistack'; // Add this import
+import { useSnackbar } from 'notistack';
+import { useAuthStateChange } from '../hooks/useAuthStateChange';
 
 const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
-  const { enqueueSnackbar } = useSnackbar(); // Add this hook
+  const { enqueueSnackbar } = useSnackbar();
+  const handleAuthStateChange = useAuthStateChange();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -33,7 +35,7 @@ const LoginPage = () => {
     email: '',
     password: ''
   });
-  const [message, setMessage] = useState(''); // Add this state
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     // Check if user attempted checkout
@@ -58,6 +60,7 @@ const LoginPage = () => {
     setLoading(true);
 
     try {
+      // Step 1: Attempt login
       const result = await login({
         username_or_email: formData.email,
         password: formData.password,
@@ -69,18 +72,48 @@ const LoginPage = () => {
             variant: 'success' 
           });
           navigate('/verify-otp');
+          return;
         }
+
+        // Step 2: Wait for auth state to fully update
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure token is set
+
+        // Step 3: Trigger all necessary data refreshes
+        await handleAuthStateChange();
+
+        // Step 4: Clear any stored paths and navigate
+        const redirectPath = sessionStorage.getItem('redirectAfterLogin') || '/';
+        sessionStorage.removeItem('redirectAfterLogin');
+        sessionStorage.removeItem('checkoutAttempted');
+
+        // Step 5: Dispatch a custom event to notify other components
+        window.dispatchEvent(new CustomEvent('login-complete', {
+          detail: { success: true }
+        }));
+
+        // Step 6: Navigate to the intended path
+        navigate(redirectPath, { replace: true });
+        
+        enqueueSnackbar('Successfully logged in!', { variant: 'success' });
       } else {
-        throw new Error(result.error);
+        throw new Error(result.error || 'Login failed');
       }
     } catch (err) {
       console.error('Login error:', err);
-      setError(err.message);
-      enqueueSnackbar(err.message, { variant: 'error' });
+      setError(err.message || 'An error occurred during login');
+      enqueueSnackbar(err.message || 'Login failed', { variant: 'error' });
     } finally {
       setLoading(false);
     }
   };
+
+  // Add cleanup effect
+  useEffect(() => {
+    return () => {
+      // Cleanup any stored temporary data on component unmount
+      sessionStorage.removeItem('checkoutAttempted');
+    };
+  }, []);
 
   return (
     <Container component="main" maxWidth="lg" sx={{ my: 8 }}>

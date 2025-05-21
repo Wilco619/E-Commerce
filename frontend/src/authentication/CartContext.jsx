@@ -36,11 +36,9 @@ export const CartProvider = ({ children }) => {
     }
   }, [isAuthenticated, enqueueSnackbar]);
 
-  // Add this function to refresh the cart
-  const refreshCart = async () => {
-    setLoading(true);
+  const refreshCart = useCallback(async () => {
     try {
-      // Use cartAPI.getCart() or similar method depending on your setup
+      setLoading(true);
       const response = await cartAPI.getCurrentCart();
       setCart(response.data);
     } catch (error) {
@@ -48,7 +46,7 @@ export const CartProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   const addToCart = async (productId, quantity) => {
     try {
@@ -140,6 +138,35 @@ export const CartProvider = ({ children }) => {
   useEffect(() => {
     fetchCart();
   }, [fetchCart]);
+
+  // Modify the auth state change handler
+  useEffect(() => {
+    const handleAuthStateChange = async () => {
+      if (isAuthenticated) {
+        setLoading(true);
+        try {
+          const sessionId = sessionStorage.getItem(GUEST_SESSION_ID);
+          if (sessionId) {
+            await cartAPI.migrateCart(sessionId);
+            sessionStorage.removeItem(GUEST_SESSION_ID);
+          }
+          const response = await cartAPI.getCurrentCart();
+          setCart(response.data);
+        } catch (error) {
+          console.error('Error handling auth state change:', error);
+          setError(error.message);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        // Clear cart when logged out
+        setCart(null);
+      }
+    };
+
+    window.addEventListener('auth-state-changed', handleAuthStateChange);
+    return () => window.removeEventListener('auth-state-changed', handleAuthStateChange);
+  }, [isAuthenticated]);
 
   const value = {
     cart,

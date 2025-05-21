@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Box, Button, TextField, Typography, Alert, CircularProgress, Paper, Stack, AlertTitle } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
@@ -7,10 +7,8 @@ import { useAuth } from '../authentication/AuthContext';
 import { useCart } from '../authentication/CartContext';
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from '../services/constants';
 
-
 const OTPVerification = () => {
-
-  const { refreshUserProfile } = useAuth();
+  const { refreshUserProfile, verifyOTP, verificationState } = useAuth();
   const { refreshCart } = useCart();
 
   const [otp, setOtp] = useState('');
@@ -20,59 +18,85 @@ const OTPVerification = () => {
   const [resendLoading, setResendLoading] = useState(false);
   const [resendSuccess, setResendSuccess] = useState(false);
   const navigate = useNavigate();
-  
+
   // Get user_id from session storage (set during login)
   const userId = sessionStorage.getItem('user_id');
-  
+
+  const handleVerification = async (otpValue) => {
+    try {
+      const result = await verifyOTP({
+        user_id: verificationState.userId,
+        otp: otpValue
+      });
+
+      if (result.success) {
+        // Set flag for App.jsx to handle refresh
+        sessionStorage.setItem('justVerified', 'true');
+        // Trigger page reload after a brief delay
+        setTimeout(() => {
+          window.location.reload();
+        }, 100);
+      }
+    } catch (error) {
+      console.error('OTP verification failed:', error);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
 
     try {
-      // Get session ID for cart migration
       const sessionId = localStorage.getItem(GUEST_SESSION_ID);
-      
-      const response = await authAPI.verifyOTP({ 
-        user_id: userId, 
+
+      const response = await authAPI.verifyOTP({
+        user_id: userId,
         otp,
         user_session_id: sessionId
       });
 
-      // Store tokens in localStorage
+      // Store tokens
       localStorage.setItem(ACCESS_TOKEN, response.data.access);
       localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
 
-      // Clear guest session data if cart was migrated
+      // Clear guest session data
       sessionStorage.removeItem('user_id');
       if (response.data.cart_migrated) {
         localStorage.removeItem(GUEST_SESSION_ID);
       }
 
-      // Add these lines to refresh data across the app
-      refreshUserProfile(); // Refresh the user profile data
-      refreshCart();        // Refresh the cart data
-      
+      // Important: First update auth state
+      await refreshUserProfile();
+
+      // Then trigger cart refresh
+      await refreshCart();
+
+      // Dispatch a custom event to notify other components
+      window.dispatchEvent(new Event('auth-state-changed'));
+
       setSuccess(true);
+
+      // Add a small delay before navigation to ensure API calls complete
       setTimeout(() => {
         navigate('/');
-      }, 1000);
+      }, 1500);
     } catch (err) {
       setLoading(false);
       setError(err.response?.data?.error || 'Invalid OTP. Please try again.');
     }
   };
-  
+
   const handleResendOTP = async () => {
     if (!userId) {
       setError('Session expired. Please login again.');
       return;
     }
-    
+
     setResendLoading(true);
     setResendSuccess(false);
     setError('');
-    
+
     try {
       const response = await authAPI.resendOTP({ user_id: userId });
       setResendSuccess(true);
@@ -82,7 +106,7 @@ const OTPVerification = () => {
       setResendLoading(false);
     }
   };
-  
+
   if (!userId) {
     return (
       <Box sx={{ mt: 8, textAlign: 'center' }}>
@@ -103,28 +127,28 @@ const OTPVerification = () => {
         <Box sx={{ bgcolor: 'primary.main', color: 'white', p: 2, borderRadius: '50%', mb: 2 }}>
           <LockOutlinedIcon />
         </Box>
-        
+
         <Typography component="h1" variant="h5" sx={{ mb: 3 }}>
           Verify Your Account
         </Typography>
-        
+
         <Typography variant="body2" color="text.secondary" align="center" sx={{ mb: 2 }}>
-          A verification code has been sent to your email. 
+          A verification code has been sent to your email.
           Please enter the 6-digit code to verify your account.
         </Typography>
-        
+
         {error && (
           <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
             {error}
           </Alert>
         )}
-        
+
         {success && (
           <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
             {success === true ? 'Verification successful!' : success}
           </Alert>
         )}
-        
+
         <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
           <TextField
             margin="normal"
@@ -139,7 +163,7 @@ const OTPVerification = () => {
             onChange={(e) => setOtp(e.target.value)}
             inputProps={{ maxLength: 6 }}
           />
-          
+
           <Button
             type="submit"
             fullWidth
@@ -149,7 +173,7 @@ const OTPVerification = () => {
           >
             {loading ? <CircularProgress size={24} /> : 'Verify'}
           </Button>
-          
+
           <Stack direction="row" justifyContent="space-between" spacing={2}>
             <Button
               variant="text"
@@ -159,7 +183,7 @@ const OTPVerification = () => {
             >
               Back to Login
             </Button>
-            
+
             <Button
               variant="text"
               color="primary"

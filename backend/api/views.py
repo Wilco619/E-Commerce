@@ -26,6 +26,12 @@ from django.utils.http import urlsafe_base64_encode, urlsafe_base64_decode
 from django.http import Http404
 from django.db import transaction, IntegrityError
 
+# views.py
+from django.http import JsonResponse
+from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_POST
+import json
+
 # Django Rest Framework imports
 from rest_framework import (
     viewsets, status, filters
@@ -1140,12 +1146,6 @@ class LogoutView(APIView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
 
-
-# views.py
-from django.http import JsonResponse
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.views.decorators.http import require_POST
-import json
 
 @ensure_csrf_cookie
 def set_csrf_token(request):

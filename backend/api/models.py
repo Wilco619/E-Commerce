@@ -305,6 +305,9 @@ class Order(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class DeliveryAreaChoices(models.TextChoices):
+        # Add PICKUP as the first choice
+        PICKUP = 'PICKUP', _('Pickup')
+        
         # CBD Areas
         KENCOM = 'KENCOM', _('Kencom')
         KENYATTA_AVE = 'KENYATTA_AVE', _('Kenyatta Avenue')
@@ -388,7 +391,10 @@ class Order(models.Model):
 
     # Add the location type mapping
     AREA_LOCATION_TYPE_MAP = {
-        # CBD Areas
+        # Add Pickup mapping
+        DeliveryAreaChoices.PICKUP: LocationType.COMMERCIAL,  # or another appropriate type
+        
+        # Existing mappings
         DeliveryAreaChoices.KENCOM: LocationType.COMMERCIAL,
         DeliveryAreaChoices.KENYATTA_AVE: LocationType.COMMERCIAL,
         DeliveryAreaChoices.MOI_AVE: LocationType.COMMERCIAL,
@@ -436,7 +442,9 @@ class Order(models.Model):
 
     def calculate_delivery_fee(self):
         """Calculate delivery fee based on location type"""
-        if self.location_type in ['CBD', 'COMMERCIAL', 'GOVERNMENT']:
+        if self.delivery_location == self.DeliveryAreaChoices.PICKUP:
+            return 0.00  # No delivery fee for pickup
+        elif self.location_type in ['CBD', 'COMMERCIAL', 'GOVERNMENT']:
             return 150.00
         elif self.location_type in ['RESIDENTIAL', 'SUBURBAN']:
             return 300.00

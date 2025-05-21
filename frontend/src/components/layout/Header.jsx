@@ -8,7 +8,8 @@ import { API } from "../../services/api";
 import { ACCESS_TOKEN } from '../../services/constants';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import { useWishlist } from '../../authentication/WishlistContext';
-  
+import ReceiptIcon from '@mui/icons-material/Receipt';
+
 // MUI Components
 import {
   AppBar,
@@ -72,25 +73,18 @@ const pulseKeyframes = {
 };
 
 const ModernHeader = ({ toggleTheme, isDarkMode }) => {
-
-  const auth = useAuth();
-
-
+  const { isAuthenticated, isAdmin, user } = useAuth(); // Get auth state directly from context
+  const location = useLocation();
+  const navigate = useNavigate();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const location = useLocation();
-  
-  const { logout } = useAuth();
-  const [user, setUser] = useState(null);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
 
+  const { logout } = useAuth();
   const [loading, setLoading] = useState(true);
   const { cart, loading: cartLoading } = useCart();
   const { sessionId } = useSession();
   const { enqueueSnackbar } = useSnackbar();
-  const navigate = useNavigate();
-  
+
   // Add wishlist context
   const { wishlistItems } = useWishlist();
 
@@ -106,42 +100,6 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  
-  
-  // Listen for auth state changes
-  useEffect(() => {
-    const checkLoggedInUser = async () => {
-      try {
-        const token = localStorage.getItem(ACCESS_TOKEN);
-        if (token) {
-          const config = {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          };
-          // Using the correct endpoint from your API
-          const response = await API.get("/profile/", config);
-          setUser(response.data);
-          setIsAuthenticated(true);
-          // Check for admin status based on your user data structure
-          setIsAdmin(response.data.is_admin || response.data.is_staff || false);
-        } else {
-          setUser(null);
-          setIsAuthenticated(false);
-          setIsAdmin(false);
-        }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    checkLoggedInUser();
-  }, [auth.user]);
 
   // Handle logout
   const handleLogout = useCallback(async () => {
@@ -172,6 +130,29 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
   useEffect(() => {
     setSkeletonLoading(loading || cartLoading);
   }, [loading, cartLoading]);
+
+  // Listen for auth state changes
+  useEffect(() => {
+    const checkLoggedInUser = async () => {
+      try {
+        setLoading(true);
+        const token = localStorage.getItem(ACCESS_TOKEN);
+        if (!token) {
+          return;
+        }
+        const response = await authAPI.getCurrentUser();
+        if (response.data) {
+          console.log('User data:', response.data); // Debug log
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    checkLoggedInUser();
+  }, []);
 
   // Handle search
   const handleSearch = (e) => {
@@ -299,12 +280,14 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
         </ListItemIcon>
         <ListItemText>Profile</ListItemText>
       </MenuItem>
-      {isAdmin && !skeletonLoading && (
+      <MenuItem onClick={() => { handleProfileMenuClose(); navigate('/orders'); }}>
+        <ListItemIcon><ReceiptIcon fontSize="small" /></ListItemIcon>
+        <ListItemText>My Orders</ListItemText>
+      </MenuItem>
+      {isAdmin && (
         <MenuItem onClick={() => { handleProfileMenuClose(); navigate('/admin'); }}>
-          <ListItemIcon>
-            <DashboardIcon fontSize="small" />
-          </ListItemIcon>
-          <ListItemText>Admin Panel</ListItemText>
+          <ListItemIcon><DashboardIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>Admin Dashboard</ListItemText>
         </MenuItem>
       )}
       <Divider sx={{ my: 1 }} />
@@ -479,6 +462,16 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
               <ListItemText primary="Profile" />
             </ListItemButton>
             
+            <ListItemButton 
+              onClick={() => navigateTo('/orders')}
+              selected={isActive('/orders')}
+            >
+              <ListItemIcon>
+                <ReceiptIcon color={isActive('/orders') ? 'primary' : 'inherit'} />
+              </ListItemIcon>
+              <ListItemText primary="My Orders" />
+            </ListItemButton>
+
             {isAdmin && (
               <ListItemButton 
                 onClick={() => navigateTo('/admin')}
@@ -630,6 +623,14 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
                 }}
               >
                 Shop
+              </Button>
+              <Button
+                color="inherit"
+                onClick={() => navigate('/orders')}
+                startIcon={<ReceiptIcon />}
+                sx={{ display: { xs: 'none', md: 'flex' } }}
+              >
+                Orders
               </Button>
             </Box>
           )}

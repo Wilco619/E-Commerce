@@ -2,6 +2,8 @@ import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from "./constants";
 import { getCookie } from '../utils/cookieUtils';
 
+// const apiUrl = "https://api.jemsa.co.ke/api/";
+
 const apiUrl = "http://127.0.0.1:8000/api/";
 // Base URL with /api/ prefix to match Django router patterns
 
@@ -408,7 +410,7 @@ const cartAPI = {
 // Order API Services
 const orderAPI = {
   getOrders: () => API.get('/orders/'),
-  getOrder: (id) => API.get(`/orders/${id}/`),
+  getOrder: (orderId) => API.get(`/orders/${orderId}/`),
   checkout: async (checkoutData) => {
     console.log('Checkout request data:', checkoutData);
     try {
@@ -416,7 +418,7 @@ const orderAPI = {
       const formattedData = {
         ...checkoutData,
         // If pickup, use KENCOM, otherwise use selected delivery location
-        delivery_location: checkoutData.is_pickup ? 'KENCOM' : checkoutData.delivery_location || '',
+        delivery_location: checkoutData.is_pickup ? 'PICKUP' : checkoutData.delivery_location || '',
       };
 
       const response = await API.post('/orders/checkout/', formattedData, {
@@ -438,6 +440,7 @@ const orderAPI = {
   },
   initiateMpesaPayment: (paymentData) => API.post('/mpesa/initiate_payment/', paymentData),
   queryMpesaStatus: (queryData) => API.post('/mpesa/query_status/', queryData),
+  updateOrderStatus: (orderId, status) => API.patch(`orders/${orderId}/update_status/`, { status }),
 };
 
 // Admin API Services
@@ -492,7 +495,14 @@ const adminAPI = {
   getOrder: (id) => API.get(`/orders/${id}/`),
   updateOrderStatus: (orderId, statusData) => API.patch(`/orders/${orderId}/update_status/`, statusData),
 
-  getDashboardData: () => API.get('/admin/dashboard/'),
+  getDashboardData: () => API.get('/admin/dashboard/').then(response => {
+    console.log('Dashboard data:', response.data);
+    return response;
+  }),
+  // getDashboardData: (timeRange = 'month') => API.get(`/admin/get_dashboard_data/?time_range=${timeRange}`),
+  getProductPerformance: () => API.get('/admin/dashboard/product-performance/'),
+  getCategoryDistribution: () => API.get('/admin/dashboard/category-distribution/'),
+  getSalesOverview: (timeRange) => API.get(`/admin/dashboard/sales-overview/?time_range=${timeRange}`)
 };
 
 // Add to your existing API services

@@ -20,6 +20,36 @@ const Footer = () => {
   const [loading, setLoading] = useState(false);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
 
+  // Social media links
+  const socialLinks = [
+    { icon: <Facebook fontSize="small" />, url: 'https://www.facebook.com/jemsatechs', label: 'Facebook' },
+    { icon: <X fontSize="small" />, url: 'https://twitter.com/jemsatechs', label: 'Twitter' },
+    { icon: <Instagram fontSize="small" />, url: 'https://www.instagram.com/jemsatechs', label: 'Instagram' },
+    { icon: <LinkedIn fontSize="small" />, url: 'https://www.linkedin.com/company/jemsatechs', label: 'LinkedIn' }
+  ];
+
+  // Contact information
+  const contactInfo = [
+    { 
+      icon: <LocationOn fontSize="small" />, 
+      url: "https://maps.google.com/?q=Bazzar+Plaza,+Nairobi+City,+Kenya",
+      label: "Our Location",
+      text: "Bazaar Plaza, Nairobi City, Kenya"
+    },
+    { 
+      icon: <Phone fontSize="small" />, 
+      url: "tel:+254720399250",
+      label: "Phone Number",
+      text: "+254 (720) 399-250"
+    },
+    { 
+      icon: <Email fontSize="small" />, 
+      url: "mailto:info@jemsa.co.ke",
+      label: "Email Address",
+      text: "info@jemsa.co.ke"
+    }
+  ];
+
   // Newsletter submit handler
   const handleNewsletterSubmit = async (e) => {
     e.preventDefault();
@@ -100,62 +130,27 @@ const Footer = () => {
               We provide a seamless shopping experience from browsing to delivery.
             </Typography>
             <Stack direction="row" spacing={1.5}>
-              <IconButton 
-                color="inherit" 
-                aria-label="Facebook" 
-                sx={{ 
-                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
-                  transition: 'all 0.2s ease',
-                  '&:hover': { 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    transform: 'translateY(-3px)' 
-                  } 
-                }}
-              >
-                <Facebook fontSize="small" />
-              </IconButton>
-              <IconButton 
-                color="inherit" 
-                aria-label="Twitter" 
-                sx={{ 
-                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
-                  transition: 'all 0.2s ease',
-                  '&:hover': { 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    transform: 'translateY(-3px)' 
-                  } 
-                }}
-              >
-                <X fontSize="small" />
-              </IconButton>
-              <IconButton 
-                color="inherit" 
-                aria-label="Instagram" 
-                sx={{ 
-                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
-                  transition: 'all 0.2s ease',
-                  '&:hover': { 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    transform: 'translateY(-3px)' 
-                  } 
-                }}
-              >
-                <Instagram fontSize="small" />
-              </IconButton>
-              <IconButton 
-                color="inherit" 
-                aria-label="LinkedIn" 
-                sx={{ 
-                  bgcolor: 'rgba(255, 255, 255, 0.1)', 
-                  transition: 'all 0.2s ease',
-                  '&:hover': { 
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    transform: 'translateY(-3px)' 
-                  } 
-                }}
-              >
-                <LinkedIn fontSize="small" />
-              </IconButton>
+              {socialLinks.map((social, index) => (
+                <IconButton 
+                  key={index}
+                  component="a"
+                  href={social.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  color="inherit" 
+                  aria-label={social.label}
+                  sx={{ 
+                    bgcolor: 'rgba(255, 255, 255, 0.1)', 
+                    transition: 'all 0.2s ease',
+                    '&:hover': { 
+                      bgcolor: 'rgba(255, 255, 255, 0.2)',
+                      transform: 'translateY(-3px)' 
+                    } 
+                  }}
+                >
+                  {social.icon}
+                </IconButton>
+              ))}
             </Stack>
           </Grid>
           
@@ -227,71 +222,40 @@ const Footer = () => {
               Contact Us
             </Typography>
             <Stack spacing={2.5}>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <Paper sx={{ 
-                p: 1, 
-                borderRadius: 1.5, 
-                mr: 1.5, 
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <LocationOn fontSize="small" />
-              </Paper>
-              <Link 
-                href="https://maps.google.com/?q=Bazzar+Plaza,+Nairobi+City,+Kenya" 
-                target="_blank"
-                rel="noopener noreferrer"
-                color="inherit"
-                underline="hover"
-                sx={{ opacity: 0.9, mt: 0.5 }}
-              >
-                Bazaar Plaza, Nairobi City, Kenya
-              </Link>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <Paper sx={{ 
-                p: 1, 
-                borderRadius: 1.5, 
-                mr: 1.5, 
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Phone fontSize="small" />
-              </Paper>
-              <Link 
-                href="tel:+254720399250" 
-                color="inherit"
-                underline="hover"
-                sx={{ opacity: 0.9, mt: 0.5 }}
-              >
-                +254 (720) 399-250
-              </Link>
-            </Box>
-            <Box sx={{ display: 'flex', alignItems: 'flex-start' }}>
-              <Paper sx={{ 
-                p: 1, 
-                borderRadius: 1.5, 
-                mr: 1.5, 
-                bgcolor: 'rgba(255, 255, 255, 0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <Email fontSize="small" />
-              </Paper>
-              <Link 
-                href="mailto:info@jemsa.co.ke" 
-                color="inherit"
-                underline="hover"
-                sx={{ opacity: 0.9, mt: 0.5 }}
-              >
-                info@jemsa.co.ke
-              </Link>
-            </Box>
+              {contactInfo.map((item, index) => (
+                <Box key={index} sx={{ display: 'flex', alignItems: 'flex-start' }}>
+                  <IconButton
+                    component="a"
+                    href={item.url}
+                    target={item.url.startsWith("https") ? "_blank" : "_self"}
+                    rel={item.url.startsWith("https") ? "noopener noreferrer" : undefined}
+                    color="inherit"
+                    aria-label={item.label}
+                    sx={{ 
+                      p: 1, 
+                      mr: 1.5, 
+                      bgcolor: 'rgba(255, 255, 255, 0.1)',
+                      transition: 'all 0.2s ease',
+                      '&:hover': { 
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        transform: 'scale(1.1)' 
+                      } 
+                    }}
+                  >
+                    {item.icon}
+                  </IconButton>
+                  <Link 
+                    href={item.url} 
+                    target={item.url.startsWith("https") ? "_blank" : "_self"}
+                    rel={item.url.startsWith("https") ? "noopener noreferrer" : undefined}
+                    color="inherit"
+                    underline="hover"
+                    sx={{ opacity: 0.9, mt: 0.5 }}
+                  >
+                    {item.text}
+                  </Link>
+                </Box>
+              ))}
             </Stack>
           </Grid>
           
