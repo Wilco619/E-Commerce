@@ -173,6 +173,25 @@ const HomePage = () => {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState(null);
 
+
+
+
+
+
+
+
+
+
+
+  useEffect(() => {
+    if (location.pathname === '/home' && !sessionStorage.getItem('reloaded')) {
+      sessionStorage.setItem('reloaded', 'true');
+      window.location.reload();
+    }
+  }, []);
+  
+
+
   useEffect(() => {
     const fetchHomePageData = async () => {
       try {
@@ -210,6 +229,10 @@ const HomePage = () => {
     fetchHomePageData();
   }, [auth.user, cart.cartId]);
 
+
+
+
+
   if (error) return <Error message={error} />;
 
   return (
@@ -231,7 +254,7 @@ const HomePage = () => {
             height={500} 
             skeleton={<HeroSectionSkeleton />}
           >
-            <HeroSection />
+            <HeroSection isSmallScreen={isSmallScreen} categories={categories} />
           </LazyLoadComponent>
 
           {/* Featured Products */}

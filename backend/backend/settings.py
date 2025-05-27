@@ -15,7 +15,6 @@ import os
 from pathlib import Path
 from datetime import timedelta
 
-
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -36,6 +35,16 @@ DEBUG = True
 
 # ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke','api.jemsa.co.ke','www.api.jemsa.co.ke']
 ALLOWED_HOSTS = ['*']
+CORS_ALLOWED_ORIGINS = [
+    # "https://jemsa.co.ke",
+    # "https://www.jemsa.co.ke",
+    "http://localhost:5173",  
+    
+]
+
+# Update CORS settings
+CORS_ALLOW_CREDENTIALS = True
+CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
 
 
 # Application definition
@@ -59,6 +68,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -66,7 +76,6 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'api.middleware.CheckoutMiddleware',
     
 ]
@@ -132,10 +141,10 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
 DATABASES = {
-   'default': {
-       'ENGINE': 'django.db.backends.sqlite3',
-       'NAME': BASE_DIR / 'db.sqlite3',
-   }
+  'default': {
+      'ENGINE': 'django.db.backends.sqlite3',
+      'NAME': BASE_DIR / 'db.sqlite3',
+  }
 }
 
 # DATABASES = {
@@ -193,52 +202,41 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True 
 
-CORS_ALLOWED_ORIGINS = [
-    # "https://jemsa.co.ke",
-    # "https://www.jemsa.co.ke",
-    "http://localhost:5173",  
-    
-]
-
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
-# Email Configuration
+# Frontend URL Configuration
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+
+# Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
-EMAIL_HOST = os.getenv('EMAIL_HOST')
-EMAIL_PORT = int(os.getenv('EMAIL_PORT'))
-EMAIL_USE_TLS = True  # Hard-code this to True since we're using port 587
-EMAIL_USE_SSL = False  # Hard-code this to False since we're using TLS
-EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
-EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
+EMAIL_HOST = os.getenv('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))
+EMAIL_USE_TLS = True
+EMAIL_USE_SSL = False
+EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'jemsa.ent@gmail.com')
+EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'uhzs vxnx rtaq abgf')
 DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
-EMAIL_SUBJECT_PREFIX = '[Jemsa Techs] '                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 
-# Enhanced email logging
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'console': {
-            'class': 'logging.StreamHandler',
-        },
-        'mail_admins': {
-            'level': 'ERROR',
-            'class': 'django.utils.log.AdminEmailHandler',
-        }
-    },
-    'loggers': {
-        'django.request': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        'django.mail': {
-            'handlers': ['console'],
-            'level': 'DEBUG',
-            'propagate': True,
-        }
-    }
-}
+
+# Email settings
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = os.getenv('EMAIL_HOST', 'mail.jemsa.co.ke')
+# EMAIL_PORT = int(os.getenv('EMAIL_PORT', 465))  # SSL port from your settings
+# EMAIL_USE_TLS = False  # Don't use TLS when using SSL
+# EMAIL_USE_SSL = True   # Use SSL for port 465
+# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'info@jemsa.co.ke')
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'zj2+dVmWO&Sd')
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+# Email settings
+# EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# EMAIL_HOST = os.getenv('EMAIL_HOST', 'mail.jemsa.co.ke')
+# EMAIL_PORT = int(os.getenv('EMAIL_PORT', 587))  # TLS port
+# EMAIL_USE_TLS = True   # Use TLS for port 587
+# EMAIL_USE_SSL = False  # Don't use SSL when using TLS
+# EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER', 'info@jemsa.co.ke')
+# EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD', 'zj2+dVmWO&Sd')
+# DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
 
 # OTP settings
 SEND_OTP_VIA_EMAIL = os.getenv('SEND_OTP_VIA_EMAIL', True)  # Set this to True to send OTPs via email
@@ -303,10 +301,6 @@ CSRF_TRUSTED_ORIGINS = [
     # Add your production domains here
 ]
 
-# Update CORS settings
-CORS_ALLOW_CREDENTIALS = True
-CORS_EXPOSE_HEADERS = ['Content-Type', 'X-CSRFToken']
-
 # If your site needs to embed resources from other domains or be embedded itself
 # you might need to adjust these settings:
 # SESSION_COOKIE_SAMESITE = 'None'  # Required for cross-origin requests
@@ -319,8 +313,8 @@ if DEBUG:
     CSRF_COOKIE_SECURE = False
     ALLOWED_HOSTS += ['localhost', '127.0.0.1']
     CORS_ALLOWED_ORIGINS += [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
+        # "http://localhost:5173",
+        # "http://127.0.0.1:5173",
     ]
 
 # Add database indexing for better session query performance
@@ -331,6 +325,23 @@ SECURE_BROWSER_XSS_FILTER = True
 SECURE_CONTENT_TYPE_NOSNIFF = True
 X_FRAME_OPTIONS = 'DENY'
 
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'loggers': {
+        'django.request': {
+            'handlers': ['console'],
+            'level': 'DEBUG',
+            'propagate': True,
+        },
+    },
+}
+
 #crontab -e
 #/usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions
 #0 */12 * * * /usr/local/bin/python3 /home/username/path_to_your_project/manage.py cleanup_sessions >> /home/username/logs/session_cleanup.log 2>&1
@@ -339,3 +350,6 @@ X_FRAME_OPTIONS = 'DENY'
 
 # Run cleanup every day at 3 AM
 #0 3 * * * /path/to/your/virtual/env/python /path/to/your/manage.py cleanup_guest_wishlists
+
+# Run every 5 minutes
+#*/5 * * * * cd /path/to/project && python manage.py cleanup_carts

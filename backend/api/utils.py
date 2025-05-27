@@ -63,3 +63,30 @@ def test_email_settings():
     except Exception as e:
         logger.error(f"Email test failed: {str(e)}")
         return False, str(e)
+
+def send_welcome_email(user):
+    """
+    Send welcome email to newly registered users
+    """
+    try:
+        context = {
+            'user': user,
+            'login_url': f"{settings.FRONTEND_URL}/login"
+        }
+        
+        html_message = render_to_string('emails/welcome_email.html', context)
+        plain_message = strip_tags(html_message)
+        
+        send_mail(
+            subject='Welcome to Jemsa Techs!',
+            message=plain_message,
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[user.email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        logger.info(f"Welcome email sent successfully to {user.email}")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
+        return False

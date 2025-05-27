@@ -50,7 +50,7 @@ from django_filters import rest_framework as django_filters
 
 # Local imports
 from .permissions import IsAdminOrReadOnly
-from .utils import send_newsletter_confirmation, send_otp_email
+from .utils import send_newsletter_confirmation, send_otp_email, send_welcome_email
 from .models import (Category, Product, Cart, CartItem, Order, OrderItem,
     ProductImage, Wishlist
 )
@@ -102,7 +102,7 @@ class UserRegistrationView(GenericAPIView):
             serializer.is_valid(raise_exception=True)
             validated_data = serializer.validated_data
             
-            # Create user without OTP
+            # Create user
             user = CustomUser.objects.create_user(
                 username=validated_data['username'],
                 email=validated_data['email'],
@@ -110,7 +110,7 @@ class UserRegistrationView(GenericAPIView):
                 user_type='CUSTOMER'
             )
             
-            # Update additional fields if present
+            # Update additional fields
             if 'first_name' in validated_data:
                 user.first_name = validated_data['first_name']
             if 'last_name' in validated_data:
@@ -125,13 +125,32 @@ class UserRegistrationView(GenericAPIView):
             # Migrate guest cart if exists
             self.migrate_guest_cart(request, user)
             
+            # Send welcome email
+            try:
+                context = {
+                    'user': user,
+                    'shop_url': f"{settings.FRONTEND_URL}/shop"
+                }
+                html_message = render_to_string('emails/welcome_email.html', context)
+                plain_message = strip_tags(html_message)
+                
+                send_mail(
+                    subject="Welcome to Jemsa Techs!",
+                    message=plain_message,
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user.email],
+                    html_message=html_message,
+                    fail_silently=True
+                )
+            except Exception as e:
+                logger.error(f"Failed to send welcome email to {user.email}: {str(e)}")
+            
             return Response({
-                'message': 'Registration successful. Please login to continue.',
+                'message': 'Registration successful. Please check your email for confirmation.',
                 'user_id': user.id
             }, status=status.HTTP_201_CREATED)
             
         except Exception as e:
-            # Handle other exceptions
             logger.error(f"Registration error: {str(e)}", exc_info=True)
             return Response({
                 'error': 'Registration failed',
@@ -670,36 +689,41 @@ class CartViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def add_item(self, request):
-        """Add item to current cart"""
         try:
-            cart = self._get_or_create_cart(request)
             product_id = request.data.get('product_id')
             quantity = int(request.data.get('quantity', 1))
-
+            
             product = Product.objects.get(id=product_id)
-            if not product.is_available or product.stock < quantity:
-                return Response(
-                    {'error': 'Product is out of stock or unavailable'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-
+            cart = self._get_or_create_cart(request)
+            
+            # Check if product is available for requested quantity
+            if not product.is_available_for_quantity(quantity, cart):
+                available = product.get_available_stock()
+                return Response({
+                    'error': f'Limited availability. Only {available} items available',
+                    'available_stock': available
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
+            # Add to cart and update timestamp
             cart_item, created = CartItem.objects.get_or_create(
                 cart=cart,
                 product=product,
                 defaults={'quantity': quantity}
             )
-
+            
             if not created:
                 cart_item.quantity += quantity
                 cart_item.save()
-
-            cart.refresh_from_db()
-            serializer = self.get_serializer(cart)
-            return Response(serializer.data)
+            
+            cart.updated_at = timezone.now()
+            cart.save()
+            
+            return Response(self.get_serializer(cart).data)
+            
         except Exception as e:
             return Response(
-                {"error": str(e)},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
     @action(detail=False, methods=['get'])
@@ -886,6 +910,16 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def checkout(self, request):
+        cart = self.get_cart()
+        
+        # Validate stock before proceeding
+        for item in cart.items.all():
+            if not item.product.has_sufficient_stock(item.quantity):
+                return Response({
+                    'error': f'Insufficient stock for {item.product.name}. Available: {item.product.stock}'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Proceed with checkout if stock is available
         serializer = CheckoutSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             # Ensure the user is assigned to the order
@@ -893,6 +927,64 @@ class OrderViewSet(viewsets.ModelViewSet):
             order_serializer = OrderSerializer(order)
             return Response(order_serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=True, methods=['post'])
+    def confirm_payment(self, request, pk=None):
+        try:
+            order = self.get_object()
+            
+            # Verify payment here
+            payment_verified = self.verify_payment(request.data)
+            
+            if payment_verified:
+                order.complete_order()  # This will trigger the signal to update stock
+                return Response({
+                    'message': 'Order completed successfully'
+                }, status=status.HTTP_200_OK)
+            
+            return Response({
+                'error': 'Payment verification failed'
+            }, status=status.HTTP_400_BAD_REQUEST)
+            
+        except Exception as e:
+            return Response({
+                'error': str(e)
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    @action(detail=True, methods=['post'])
+    def complete_order(self, request, pk=None):
+        try:
+            order = self.get_object()
+            
+            # Verify payment and process order
+            if self.verify_payment(request.data):
+                # Update product stock
+                with transaction.atomic():
+                    for item in order.items.all():
+                        product = item.product
+                        product.stock -= item.quantity
+                        product.save()
+                    
+                    # Mark order as complete
+                    order.status = 'completed'
+                    order.save()
+                    
+                    # Mark cart as converted
+                    order.cart.status = 'converted'
+                    order.cart.save()
+                
+                return Response({'message': 'Order completed successfully'})
+            
+            return Response(
+                {'error': 'Payment verification failed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class ResendOTPView(GenericAPIView):
     permission_classes = (AllowAny,)
@@ -1296,3 +1388,68 @@ class WishlistViewSet(viewsets.ModelViewSet):
         if self.action in ['items', 'toggle', 'migrate']:
             return [IsAuthenticated()]
         return super().get_permissions()
+
+class ResetPasswordView(APIView):
+    permission_classes = [AllowAny]  # Allow unauthenticated access
+    
+    def post(self, request, uid, token):
+        try:
+            # Decode the user id
+            uid = urlsafe_base64_decode(uid).decode()
+            user = CustomUser.objects.get(pk=uid)
+            
+            # Verify the token
+            if not default_token_generator.check_token(user, token):
+                return Response(
+                    {'error': 'Invalid or expired reset link'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Get and validate the new password
+            new_password = request.data.get('new_password')
+            if not new_password:
+                return Response(
+                    {'error': 'New password is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Set the new password
+            user.set_password(new_password)
+            user.save()
+            
+            # Send confirmation email
+            context = {
+                'user': user,
+                'login_url': f"{settings.FRONTEND_URL}/login",
+                'timestamp': timezone.now()
+            }
+            
+            html_message = render_to_string(
+                'emails/password_reset_confirmation.html',
+                context
+            )
+            plain_message = strip_tags(html_message)
+            
+            send_mail(
+                subject="Password Reset Successful - Jemsa Techs",
+                message=plain_message,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                recipient_list=[user.email],
+                html_message=html_message,
+                fail_silently=False,
+            )
+            
+            return Response({
+                'message': 'Password reset successful'
+            })
+            
+        except (TypeError, ValueError, OverflowError, CustomUser.DoesNotExist):
+            return Response(
+                {'error': 'Invalid reset link'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

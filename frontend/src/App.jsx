@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate, BrowserRouter as Router } from 'react-router-dom';
 import { ProtectedRoute, AdminRoute } from './components/ProtectedRoutes';
 import PreLoader from './components/PreLoader';
 import { useAuth } from './authentication/AuthContext';
+import PasswordReset from './components/auth/PasswordReset';
 // Public Pages
 import HomePage from './pages/HomePage';
 import ShopPage from './pages/ShopPage';
@@ -90,6 +91,7 @@ const AppRoutes = () => {
       <Route path="/password-change" element={<PasswordChange />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/wishlist" element={<WishlistPage />} />
+      <Route path="/reset-password/:uid/:token" element={<PasswordReset />} />
       
       {/* Protected Customer Routes */}
       <Route element={<ProtectedRoute />}>

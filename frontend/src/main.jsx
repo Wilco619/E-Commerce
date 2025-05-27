@@ -24,15 +24,48 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => (
   </div>
 );
 
-// Update the refresh header function
-export const refreshHeader = () => {
-  const event = new CustomEvent('auth-state-changed', {
+// Create a unified app state event system
+export const refreshAppState = (type = 'auth', detail = {}) => {
+  console.log(`Broadcasting app state change: ${type}`, detail);
+  const event = new CustomEvent('app-state-changed', {
     detail: {
-      timestamp: Date.now()
+      type,
+      timestamp: Date.now(),
+      ...detail
     }
   });
   window.dispatchEvent(event);
+  
+  // For debugging
+  console.log('Event dispatched:', event);
 };
+
+// For backwards compatibility
+export const refreshHeader = () => {
+  refreshAppState('auth');
+};
+
+// Initialize any global handlers needed
+const setupGlobalHandlers = () => {
+  // Expose window functions for debugging
+  window.refreshAppState = refreshAppState;
+  
+  // Log all app-state-changed events for debugging
+  window.addEventListener('app-state-changed', (event) => {
+    console.log('App state change detected:', event.detail);
+  });
+  
+  // Handle API errors
+  window.addEventListener('unhandledrejection', event => {
+    if (event.reason?.response?.status === 401) {
+      // If there's an unauthorized error in background
+      console.error('Unauthorized API call:', event.reason);
+    }
+  });
+};
+
+// Make sure to call this before rendering
+setupGlobalHandlers();
 
 const root = createRoot(document.getElementById('root'));
 
@@ -41,20 +74,25 @@ root.render(
     <ErrorBoundary FallbackComponent={ErrorFallback}>
       <BrowserRouter>
         <SnackbarProvider maxSnack={3}>
-          <SessionProvider>
-            <AuthProvider>
-              <CartProvider>
-                <WishlistProvider>
-                  <CookieProvider>
+          {/* CookieProvider first as it doesn't depend on other contexts */}
+          <CookieProvider>
+            {/* SessionProvider second as auth and cart depend on it */}
+            <SessionProvider>
+              {/* Auth provider third as cart depends on auth state */}
+              <AuthProvider>
+                {/* Cart provider depends on auth state */}
+                <CartProvider>
+                  {/* Wishlist provider depends on auth and cart */}
+                  <WishlistProvider>
                     <Header />
                     <App />
                     <Footer />
                     <CookieConsent />
-                  </CookieProvider>
-                </WishlistProvider>
-              </CartProvider>
-            </AuthProvider>
-          </SessionProvider>
+                  </WishlistProvider>
+                </CartProvider>
+              </AuthProvider>
+            </SessionProvider>
+          </CookieProvider>
         </SnackbarProvider>
       </BrowserRouter>
     </ErrorBoundary>

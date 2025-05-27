@@ -5,9 +5,9 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.validators import MinValueValidator
 from django.utils.text import slugify
 from django.utils import timezone
+from datetime import timedelta
 import random
 from django.db.models import Count
-from datetime import timedelta
 from django.utils.translation import gettext_lazy as _
 from django.core.exceptions import ValidationError
 
@@ -103,16 +103,47 @@ class Category(models.Model):
 class Product(models.Model):
     name = models.CharField(max_length=200)
     slug = models.SlugField(unique=True)
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='products'
+    )
     description = models.TextField()
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_feature = models.BooleanField(default=False)
     stock = models.IntegerField(default=0)
     is_available = models.BooleanField(default=True)
-    is_feature = models.BooleanField(default=False)  # Remove null=True
-    category = models.ForeignKey('Category', on_delete=models.CASCADE, related_name='products')
-    sku = models.CharField(max_length=100, unique=True, blank=True, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
+    def get_reserved_quantity(self):
+        """Get quantity reserved in active carts"""
+        active_window = timezone.now() - timedelta(hours=1)  # Consider carts active in last hour
+        return CartItem.objects.filter(
+            product=self,
+            cart__status='active',
+            cart__updated_at__gte=active_window
+        ).aggregate(
+            total=models.Sum('quantity')
+        )['total'] or 0
+
+    def get_available_stock(self):
+        """Get actual available stock minus reserved quantities"""
+        return max(0, self.stock - self.get_reserved_quantity())
+
+    def is_available_for_quantity(self, requested_quantity, current_cart=None):
+        """Check if requested quantity is available considering current reservations"""
+        current_cart_quantity = 0
+        if current_cart:
+            cart_item = current_cart.items.filter(product=self).first()
+            current_cart_quantity = cart_item.quantity if cart_item else 0
+        
+        # Exclude current cart's quantity from reserved count
+        other_reservations = self.get_reserved_quantity() - current_cart_quantity
+        actual_available = self.stock - other_reservations
+        
+        return self.is_available and actual_available >= requested_quantity
 
     def save(self, *args, **kwargs):
         if not self.sku:
@@ -171,6 +202,26 @@ class Cart(models.Model):
         blank=True,
         related_name='cart'
     )
+
+    CART_STATUS = (
+        ('active', 'Active'),
+        ('abandoned', 'Abandoned'),
+        ('converted', 'Converted to Order')
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=CART_STATUS,
+        default='active'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def mark_abandoned(self):
+        """Mark cart as abandoned and release reserved stock"""
+        self.status = 'abandoned'
+        self.save()
+
     session_id = models.CharField(max_length=100, null=True, blank=True)
     cart_type = models.CharField(
         max_length=20,
@@ -248,6 +299,7 @@ class Order(models.Model):
         ('PROCESSING', 'Processing'),
         ('SHIPPED', 'Shipped'),
         ('DELIVERED', 'Delivered'),
+        ('COMPLETED', 'Completed'),
         ('CANCELLED', 'Cancelled'),
     )
     
@@ -489,6 +541,13 @@ class Order(models.Model):
     
     def mark_as_delivered(self):
         self.order_status = 'DELIVERED'
+        self.save()
+
+    def complete_order(self):
+        """
+        Mark order as complete and trigger stock update
+        """
+        self.status = 'COMPLETED'
         self.save()
 
 class OrderItem(models.Model):

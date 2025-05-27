@@ -165,25 +165,47 @@ const authAPI = {
   },
   
   login: (credentials) => {
+    const loginInstance = axios.create({
+      baseURL: API.defaults.baseURL,
+      timeout: 60000, // Increase timeout to 60 seconds
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
     
-    // Add interceptor to log the response or error
-    const interceptor = API.interceptors.response.use(
-      response => {
-        
-        return response;
+    // Add request interceptor for debugging
+    loginInstance.interceptors.request.use(
+      (config) => {
+        console.log('Login request started');
+        return config;
       },
-      error => {
-        
+      (error) => {
+        console.error('Login request error:', error);
         return Promise.reject(error);
       }
     );
-    
-    // Make the API call
-    return API.post('/login/', credentials)
-      .finally(() => {
-        // Eject the interceptor after the request is complete
-        API.interceptors.response.eject(interceptor);
-      });
+
+    // Add response interceptor for debugging
+    loginInstance.interceptors.response.use(
+      (response) => {
+        console.log('Login response received');
+        return response;
+      },
+      (error) => {
+        if (error.code === 'ECONNABORTED') {
+          console.error('Login request timed out');
+          throw new Error('Login request timed out. Please try again.');
+        }
+        if (!error.response) {
+          console.error('Network error during login');
+          throw new Error('Network error. Please check your connection.');
+        }
+        console.error('Login error:', error.response?.data || error.message);
+        throw error;
+      }
+    );
+
+    return loginInstance.post('/login/', credentials);
   },
   
   verifyOTP: (otpData) => API.post('/verify-otp/', otpData),
@@ -194,6 +216,8 @@ const authAPI = {
   forgotPassword: (email) => API.post('/forgot-password/', { email }),
   getCurrentUser: () => API.get('/profile/'),
   updateProfile: (userData) => API.put('/profile/', userData),
+  resetPassword: ({ uid, token, new_password }) => 
+        API.post(`/reset-password/${uid}/${token}/`, { new_password }),
 };
 
 // Products API Services

@@ -1,11 +1,15 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Slider from 'react-slick';
 import { Box, Typography, Button, Container, Grid } from '@mui/material';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
+import KeyboardArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 
-const HeroSection = ({ isSmallScreen }) => {
+const HeroSection = ({ isSmallScreen, categories = [] }) => {
+  const [hoveredCategory, setHoveredCategory] = useState(null);
+  const navigate = useNavigate();
+
   // Slider settings
   const settings = {
     dots: false,
@@ -27,6 +31,10 @@ const HeroSection = ({ isSmallScreen }) => {
     '/back3.jpeg'
   ];
 
+  const handleCategoryClick = (slug) => {
+    navigate(`/category/${slug}`);
+  };
+
   return (
     <Box
       sx={{
@@ -36,6 +44,78 @@ const HeroSection = ({ isSmallScreen }) => {
         overflow: 'hidden'
       }}
     >
+      {/* Category Menu */}
+      <Box
+        sx={{
+          position: 'absolute',
+          left: 0,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          backgroundColor: 'rgba(255, 255, 255, 0.95)',
+          zIndex: 5,
+          borderTopRightRadius: 8,
+          borderBottomRightRadius: 8,
+          boxShadow: 3,
+          width: 130, // Reduced from 150
+          display: { xs: 'none', md: 'block' }
+        }}
+      >
+        {/* Category Header */}
+        <Typography
+          variant="subtitle1" // Changed from h6
+          sx={{
+            p: 1.5, // Reduced padding from 2
+            borderBottom: 1,
+            borderColor: 'divider',
+            fontWeight: 600,
+            fontSize: '0.9rem', // Added explicit font size
+            textAlign: 'center',
+            backgroundColor: 'primary.main',
+            color: 'primary.contrastText',
+            borderTopRightRadius: 8
+          }}
+        >
+          Categories
+        </Typography>
+
+        {categories.map((category) => (
+          <Box
+            key={category.id}
+            onClick={() => handleCategoryClick(category.slug)}
+            onMouseEnter={() => setHoveredCategory(category.id)}
+            onMouseLeave={() => setHoveredCategory(null)}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              p: 1.5, // Reduced padding from 2
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                backgroundColor: 'primary.light',
+                color: 'primary.main',
+              },
+              borderBottom: 1,
+              borderColor: 'divider'
+            }}
+          >   
+            <Typography 
+              variant="body2" // Changed from body1
+              sx={{ fontSize: '0.85rem' }} // Added explicit font size
+            >
+              {category.name}
+            </Typography>
+            <KeyboardArrowRightIcon 
+              sx={{
+                fontSize: '1rem', // Added smaller icon size
+                transform: hoveredCategory === category.id ? 'translateX(5px)' : 'none',
+                transition: 'transform 0.3s ease'
+              }}
+            />
+          </Box>
+        ))}
+      </Box>
+
       {/* Full-Width Background Slider */}
       <Box
         sx={{

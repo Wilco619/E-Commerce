@@ -3,13 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { authAPI } from '../services/api';
 import { ACCESS_TOKEN, REFRESH_TOKEN } from '../services/constants';
 import PreLoader from '../components/PreLoader';
-// import { useCart } from './CartContext';
+import { refreshAppState } from '../main';
 
 const AuthContext = createContext(null);
 
+// Create a consistent event name
+const APP_STATE_CHANGED = 'app-state-changed';
+
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
-  // const [refreshCart]= useCart();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -20,8 +22,6 @@ export const AuthProvider = ({ children }) => {
   });
   const [verifyingOTP, setVerifyingOTP] = useState(false);
   
-  const AUTH_STATE_CHANGED_EVENT = 'authStateChanged';
-
   // Use refs to track auth state changes
   const authStateRef = useRef({ isAuthenticated, isAdmin, userId: null });
 
@@ -56,15 +56,12 @@ export const AuthProvider = ({ children }) => {
         ...updates
       };
       
-      // Broadcast auth changes to other components
-      const event = new CustomEvent(AUTH_STATE_CHANGED_EVENT, { 
-        detail: { 
-          isAuthenticated: updates.isAuthenticated ?? authStateRef.current.isAuthenticated,
-          isAdmin: updates.isAdmin ?? authStateRef.current.isAdmin,
-          userId: updates.userId ?? authStateRef.current.userId
-        } 
+      // Broadcast auth changes to other components using the consistent event format
+      refreshAppState('auth', { 
+        isAuthenticated: updates.isAuthenticated ?? authStateRef.current.isAuthenticated,
+        isAdmin: updates.isAdmin ?? authStateRef.current.isAdmin,
+        userId: updates.userId ?? authStateRef.current.userId
       });
-      window.dispatchEvent(event);
     }
   }, []);
 
@@ -108,17 +105,21 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, [fetchCurrentUser]);
-
-  
   
   // Add this function to refresh the user profile
   const refreshUserProfile = async () => {
     setLoading(true);
     try {
       const response = await authAPI.getCurrentUser();
-      setUser(response.data);
+      updateAuthState({
+        user: response.data,
+        isAuthenticated: true,
+        isAdmin: response.data.user_type === 'ADMIN'
+      });
+      return response.data;
     } catch (error) {
       console.error('Failed to refresh user profile:', error);
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -154,12 +155,11 @@ export const AuthProvider = ({ children }) => {
         const userData = userResponse.data;
         
         // Update state synchronously
-        setUser(userData);
-        setIsAuthenticated(true);
-        setIsAdmin(userData.is_staff || userData.user_type === 'ADMIN');
-        
-        // Trigger state change event
-        window.dispatchEvent(new CustomEvent('auth-state-changed'));
+        updateAuthState({
+          user: userData,
+          isAuthenticated: true,
+          isAdmin: userData.is_staff || userData.user_type === 'ADMIN'
+        });
         
         return { success: true, requiresOTP: false };
       }
@@ -173,10 +173,10 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Login error:', error);
       console.error('Login error full details:', {
-      message: error.message,
-      response: error.response?.data,
-      status: error.response?.status
-    });
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status
+      });
       return { 
         success: false, 
         error: error.response?.data?.error || error.response?.data?.detail || 'Failed to login'
@@ -193,8 +193,8 @@ export const AuthProvider = ({ children }) => {
       
       if (response.data.access && response.data.refresh) {
         // Store tokens
-        localStorage.setItem('access_token', response.data.access);
-        localStorage.setItem('refresh_token', response.data.refresh);
+        localStorage.setItem(ACCESS_TOKEN, response.data.access);
+        localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
         
         // Update auth state
         const userData = response.data.user || (await authAPI.getCurrentUser()).data;
@@ -204,6 +204,12 @@ export const AuthProvider = ({ children }) => {
         setVerificationState({
           needsOTP: false,
           userId: null
+        });
+        
+        // Broadcast auth state changes
+        refreshAppState('auth', { 
+          isAuthenticated: true,
+          timestamp: Date.now()
         });
         
         return { success: true };
@@ -223,21 +229,6 @@ export const AuthProvider = ({ children }) => {
       setVerifyingOTP(false);
     }
   };
-
-  // Add auth state change listener
-  useEffect(() => {
-    const handleAuthChange = () => {
-      // Access the event details if needed
-    const { isAuthenticated, isAdmin, userId } = event.detail;
-    
-    // Force re-render or update local state if needed
-    setIsAuthenticated(isAuthenticated);
-    setIsAdmin(isAdmin);
-    };
-
-    window.addEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthChange);
-    return () => window.removeEventListener(AUTH_STATE_CHANGED_EVENT, handleAuthChange);
-  }, []);
 
   const resendOTP = async (userId) => {
     try {
@@ -295,33 +286,38 @@ export const AuthProvider = ({ children }) => {
 
   const handleLoginSuccess = useCallback(async (userData) => {
     try {
-        // First update auth state
-        setUser(userData);
-        setIsAuthenticated(true);
-        setIsAdmin(userData.user_type === 'ADMIN');
-
-        // Then fetch fresh user data
-        await refreshUserProfile();
+        // First update auth state with full user data
+        updateAuthState({
+          user: userData,
+          isAuthenticated: true,
+          isAdmin: userData.user_type === 'ADMIN'
+        });
         
-        // Then refresh cart data
-        // await refreshCart();
-
-        // Dispatch auth state change event
-        window.dispatchEvent(new Event('auth-state-changed'));
-
+        // Explicitly broadcast the auth state change
+        refreshAppState('auth', { 
+          isAuthenticated: true,
+          timestamp: Date.now() 
+        });
+        
         // Handle post-login redirect
         const redirectPath = sessionStorage.getItem('redirectAfterLogin');
+        
+        // Set a flag to indicate we just logged in (helps with migrations)
+        sessionStorage.setItem('justAuthenticated', 'true');
+        
         if (redirectPath) {
             sessionStorage.removeItem('redirectAfterLogin');
             navigate(redirectPath);
         } else {
             navigate('/');
         }
+        
+        return userData;
     } catch (error) {
         console.error('Error during login success handling:', error);
-        enqueueSnackbar('Error refreshing user data', { variant: 'error' });
+        throw error;
     }
-}, [navigate, refreshUserProfile]);
+  }, [navigate, updateAuthState]);
 
   // Make auth state available to API interceptors
   useEffect(() => {
@@ -345,6 +341,7 @@ export const AuthProvider = ({ children }) => {
     user,
     loading,
     isAuthenticated,
+    setIsAuthenticated,
     isAdmin,
     verificationState,
     register,
@@ -360,10 +357,6 @@ export const AuthProvider = ({ children }) => {
     setVerifyingOTP,
     refreshUserProfile
   };
-
-  // if (loading) {
-  //   return <PreLoader message="Initializing application..." />;
-  // }
 
   if (verifyingOTP) {
     return <PreLoader message="Verifying OTP..." />;

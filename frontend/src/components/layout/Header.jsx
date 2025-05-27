@@ -4,7 +4,7 @@ import { useAuth } from '../../authentication/AuthContext';
 import { useCart } from '../../authentication/CartContext';
 import { useSession } from '../../authentication/SessionContext';
 import { useSnackbar } from 'notistack';
-import { API } from "../../services/api";
+import { API, authAPI } from "../../services/api";
 import { ACCESS_TOKEN } from '../../services/constants';
 import FavoriteIcon from '@mui/icons-material/Favorite';
 import { useWishlist } from '../../authentication/WishlistContext';
@@ -73,7 +73,7 @@ const pulseKeyframes = {
 };
 
 const ModernHeader = ({ toggleTheme, isDarkMode }) => {
-  const { isAuthenticated, isAdmin, user } = useAuth(); // Get auth state directly from context
+  const { isAuthenticated, isAdmin, user, setIsAuthenticated, fetchCurrentUser } = useAuth(); // Get auth state and fetchCurrentUser
   const location = useLocation();
   const navigate = useNavigate();
   const theme = useTheme();
@@ -100,6 +100,11 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
   const [profileAnchorEl, setProfileAnchorEl] = useState(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // Improved auth state monitoring
+  useEffect(() => {
+    console.log('Auth state changed, isAuthenticated:', isAuthenticated);
+  }, [isAuthenticated]);
 
   // Handle logout
   const handleLogout = useCallback(async () => {
@@ -138,11 +143,13 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
         setLoading(true);
         const token = localStorage.getItem(ACCESS_TOKEN);
         if (!token) {
+          setIsAuthenticated(false);
+          setLoading(false);
           return;
         }
         const response = await authAPI.getCurrentUser();
         if (response.data) {
-          console.log('User data:', response.data); // Debug log
+          console.log('User data fetched:', response.data); // Debug log
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -152,7 +159,22 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
     };
     
     checkLoggedInUser();
-  }, []);
+    
+    // Listen for app-state-changed event
+    const handleAppStateChanged = (event) => {
+      if (event && event.detail && event.detail.type === 'auth') {
+        console.log('Auth state change detected, refreshing user data');
+        checkLoggedInUser();
+      }
+    };
+    
+    window.addEventListener('app-state-changed', handleAppStateChanged);
+    
+    // Clean up
+    return () => {
+      window.removeEventListener('app-state-changed', handleAppStateChanged);
+    };
+  }, [setIsAuthenticated]);
 
   // Handle search
   const handleSearch = (e) => {
@@ -702,7 +724,8 @@ const ModernHeader = ({ toggleTheme, isDarkMode }) => {
                     <ShoppingCartIcon />
                   )}
                 </Badge>
-              </IconButton>
+
+                </IconButton>
             </Tooltip>
 
             {/* Wishlist */}

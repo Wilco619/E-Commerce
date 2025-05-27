@@ -9,8 +9,8 @@ export const GUEST_WISHLIST_ID = "guestWishlist";
 
 export const deliveryAreas = {
   'CBD Areas': [
-    { value: 'PICKUP', label: 'Pickup', fee: 0 },
     { value: 'KENCOM', label: 'Kencom', fee: 150 },
+    { value: 'PICKUP', label: 'Pickup', fee: 0 },
     { value: 'KENYATTA_AVE', label: 'Kenyatta Avenue', fee: 150 },
     { value: 'MOI_AVE', label: 'Moi Avenue', fee: 150 },
     { value: 'TOM_MBOYA', label: 'Tom Mboya Street', fee: 150 },

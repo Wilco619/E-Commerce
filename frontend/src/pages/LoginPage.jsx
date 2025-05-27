@@ -68,8 +68,8 @@ const LoginPage = () => {
 
       if (result.success) {
         if (result.requiresOTP) {
-          enqueueSnackbar('Please verify your account with OTP sent to your email', { 
-            variant: 'success' 
+          enqueueSnackbar('Please verify your account with OTP sent to your email', {
+            variant: 'success'
           });
           navigate('/verify-otp');
           return;
@@ -93,7 +93,7 @@ const LoginPage = () => {
 
         // Step 6: Navigate to the intended path
         navigate(redirectPath, { replace: true });
-        
+
         enqueueSnackbar('Successfully logged in!', { variant: 'success' });
       } else {
         throw new Error(result.error || 'Login failed');
@@ -116,199 +116,207 @@ const LoginPage = () => {
   }, []);
 
   return (
-    <Container component="main" maxWidth="lg" sx={{ my: 8 }}>
-      <Paper 
-        elevation={6} 
-        sx={{ 
-          display: 'flex',
-          flexDirection: { xs: 'column', md: 'row' },
-          overflow: 'hidden',
-          borderRadius: 2,
-          minHeight: '600px',
-        }}
-      >
-        {/* Left Side - Image */}
-        <Box
+    <>
+
+
+
+
+
+      <Container component="main" maxWidth="lg" sx={{ my: 8 }}>
+
+        <Paper
+          elevation={6}
           sx={{
-            display: { xs: 'none', md: 'flex' },
-            flex: 1,
-            bgcolor: 'primary.dark',
-            position: 'relative',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: 'white',
-            backgroundImage: 'url("https://source.unsplash.com/random?login")',
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            display: 'flex',
+            flexDirection: { xs: 'column', md: 'row' },
+            overflow: 'hidden',
+            borderRadius: 2,
+            minHeight: '600px',
           }}
         >
-          {/* Dark overlay for better text visibility */}
+          {/* Left Side - Image */}
           <Box
             sx={{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: 'rgba(0, 0, 0, 0.5)',
-              zIndex: 1,
-            }}
-          />
-          
-          {/* Welcome text overlay */}
-          <Box 
-            sx={{ 
-              position: 'relative', 
-              zIndex: 2, 
-              p: 4, 
-              textAlign: 'center',
-              maxWidth: '80%'
+              display: { xs: 'none', md: 'flex' },
+              flex: 1,
+              bgcolor: 'primary.dark',
+              position: 'relative',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'white',
+              backgroundImage: 'url("https://source.unsplash.com/random?login")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
             }}
           >
-            <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
-              Welcome Back
-            </Typography>
-            <Typography variant="body1">
-              Sign in to access your account and continue your shopping experience
-            </Typography>
-          </Box>
-        </Box>
+            {/* Dark overlay for better text visibility */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                zIndex: 1,
+              }}
+            />
 
-        {/* Right Side - Login Form */}
-        <Box
-          sx={{
-            flex: 1,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            p: { xs: 3, sm: 6 },
-          }}
-        >
+            {/* Welcome text overlay */}
+            <Box
+              sx={{
+                position: 'relative',
+                zIndex: 2,
+                p: 4,
+                textAlign: 'center',
+                maxWidth: '80%'
+              }}
+            >
+              <Typography variant="h4" component="h1" gutterBottom fontWeight="bold">
+                Welcome Back
+              </Typography>
+              <Typography variant="body1">
+                Sign in to access your account and continue your shopping experience
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Right Side - Login Form */}
           <Box
             sx={{
-              width: '100%',
-              maxWidth: 400,
+              flex: 1,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
+              justifyContent: 'center',
+              p: { xs: 3, sm: 6 },
             }}
           >
-            <Box sx={{ 
-              backgroundColor: 'primary.main', 
-              borderRadius: '50%', 
-              p: 1, 
-              mb: 2 
-            }}>
-              <LockOutlined sx={{ color: 'white' }} />
-            </Box>
-            
-            <Typography component="h2" variant="h5" fontWeight="bold" mb={3}>
-              Sign In
-            </Typography>
-            
-            {error && (
-              <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
-                {error}
-              </Alert>
-            )}
-            
-            {message && (
-              <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
-                {message}
-              </Alert>
-            )}
-            
-            <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                id="email"
-                label="Email"
-                name="email"
-                autoComplete="email"
-                autoFocus
-                value={formData.email}
-                onChange={handleChange}
-                disabled={loading}
-                variant="outlined"
-              />
-              <TextField
-                margin="normal"
-                required
-                fullWidth
-                name="password"
-                label="Password"
-                type={showPassword ? 'text' : 'password'}
-                id="password"
-                autoComplete="current-password"
-                value={formData.password}
-                onChange={handleChange}
-                disabled={loading}
-                variant="outlined"
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        aria-label="toggle password visibility"
-                        onClick={() => setShowPassword(!showPassword)}
-                        edge="end"
-                      >
-                        {showPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-              />
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                sx={{ 
-                  mt: 3, 
-                  mb: 2, 
-                  py: 1.5,
-                  borderRadius: 2,
-                  fontWeight: 'bold',
-                }}
-                disabled={loading}
-              >
-                {loading ? <CircularProgress size={24} /> : 'Sign In'}
-              </Button>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
-                <Link component={RouterLink} to="/forgot-password" variant="body2">
-                  Forgot password?
-                </Link>
-                <Link component={RouterLink} to="/register" variant="body2">
-                  {"Don't have an account? Sign Up"}
-                </Link>
-              </Box>
-            </Box>
-            
-            <Divider sx={{ my: 3, width: '100%' }}>
-              <Typography variant="body2" color="text.secondary">
-                OR
-              </Typography>
-            </Divider>
-            
-            <Button
-              component={RouterLink}
-              to="/shop"
-              fullWidth
-              variant="outlined"
-              sx={{ 
-                mt: 1,
-                py: 1.5,
-                borderRadius: 2,
+            <Box
+              sx={{
+                width: '100%',
+                maxWidth: 400,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
               }}
             >
-              Continue as Guest
-            </Button>
+              <Box sx={{
+                backgroundColor: 'primary.main',
+                borderRadius: '50%',
+                p: 1,
+                mb: 2
+              }}>
+                <LockOutlined sx={{ color: 'white' }} />
+              </Box>
+
+              <Typography component="h2" variant="h5" fontWeight="bold" mb={3}>
+                Sign In
+              </Typography>
+
+              {error && (
+                <Alert severity="error" sx={{ width: '100%', mb: 2 }}>
+                  {error}
+                </Alert>
+              )}
+
+              {message && (
+                <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+                  {message}
+                </Alert>
+              )}
+
+              <Box component="form" onSubmit={handleSubmit} sx={{ width: '100%' }}>
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  id="email"
+                  label="Email"
+                  name="email"
+                  autoComplete="email"
+                  autoFocus
+                  value={formData.email}
+                  onChange={handleChange}
+                  disabled={loading}
+                  variant="outlined"
+                />
+                <TextField
+                  margin="normal"
+                  required
+                  fullWidth
+                  name="password"
+                  label="Password"
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  autoComplete="current-password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  disabled={loading}
+                  variant="outlined"
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton
+                          aria-label="toggle password visibility"
+                          onClick={() => setShowPassword(!showPassword)}
+                          edge="end"
+                        >
+                          {showPassword ? <VisibilityOff /> : <Visibility />}
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                  }}
+                />
+                <Button
+                  type="submit"
+                  fullWidth
+                  variant="contained"
+                  sx={{
+                    mt: 3,
+                    mb: 2,
+                    py: 1.5,
+                    borderRadius: 2,
+                    fontWeight: 'bold',
+                  }}
+                  disabled={loading}
+                >
+                  {loading ? <CircularProgress size={24} /> : 'Sign In'}
+                </Button>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                  <Link component={RouterLink} to="/forgot-password" variant="body2">
+                    Forgot password?
+                  </Link>
+                  <Link component={RouterLink} to="/register" variant="body2">
+                    {"Don't have an account? Sign Up"}
+                  </Link>
+                </Box>
+              </Box>
+
+              <Divider sx={{ my: 3, width: '100%' }}>
+                <Typography variant="body2" color="text.secondary">
+                  OR
+                </Typography>
+              </Divider>
+
+              <Button
+                component={RouterLink}
+                to="/shop"
+                fullWidth
+                variant="outlined"
+                sx={{
+                  mt: 1,
+                  py: 1.5,
+                  borderRadius: 2,
+                }}
+              >
+                Continue as Guest
+              </Button>
+            </Box>
           </Box>
-        </Box>
-      </Paper>
-    </Container>
+        </Paper>
+      </Container>
+    </>
   );
 };
 

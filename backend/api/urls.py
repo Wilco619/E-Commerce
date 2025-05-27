@@ -20,6 +20,7 @@ urlpatterns = [
     path('logout/', views.UserLogOutAPIView.as_view(), name='logout'),
     path('change-password/', views.PasswordChangeView.as_view(), name='change-password'),
     path('forgot-password/', views.ForgotPasswordView.as_view(), name='forgot-password'),
+    path('reset-password/<str:uid>/<str:token>/', views.ResetPasswordView.as_view(), name='reset-password'),
     path('profile/', views.UserProfileView.as_view(), name='profile'),
 
     # Newsletter endpoint

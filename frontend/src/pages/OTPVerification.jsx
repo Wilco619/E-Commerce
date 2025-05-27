@@ -6,9 +6,10 @@ import { authAPI } from '../services/api';
 import { useAuth } from '../authentication/AuthContext';
 import { useCart } from '../authentication/CartContext';
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from '../services/constants';
+import { refreshAppState } from '../main';
 
 const OTPVerification = () => {
-  const { refreshUserProfile, verifyOTP, verificationState } = useAuth();
+  const { refreshUserProfile, verifyOTP, verificationState, setIsAuthenticated } = useAuth();
   const { refreshCart } = useCart();
 
   const [otp, setOtp] = useState('');
@@ -20,72 +21,152 @@ const OTPVerification = () => {
   const navigate = useNavigate();
 
   // Get user_id from session storage (set during login)
-  const userId = sessionStorage.getItem('user_id');
+  const [userId, setUserId] = useState(() => {
+    // Try to get from sessionStorage first
+    const storedId = sessionStorage.getItem('user_id');
+    
+    // If not in sessionStorage, try localStorage (as a backup)
+    if (!storedId) {
+      const localId = localStorage.getItem('userId');
+      return localId || null;
+    }
+  
+    return storedId;
+  });
+
+  // Check if already verified on mount
+  useEffect(() => {
+    const accessToken = localStorage.getItem(ACCESS_TOKEN);
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN);
+    
+    if (accessToken && refreshToken) {
+      setSuccess(true);
+    }
+  }, []);
 
   const handleVerification = async (otpValue) => {
+    if (loading) return; // Prevent multiple submissions
+    
+    setLoading(true);
     try {
       const result = await verifyOTP({
-        user_id: verificationState.userId,
+        user_id: verificationState.userId || userId,
         otp: otpValue
       });
-
+  
       if (result.success) {
         // Set flag for App.jsx to handle refresh
         sessionStorage.setItem('justVerified', 'true');
-        // Trigger page reload after a brief delay
+        
+        // Display success message first
+        setSuccess(true);
+        
+        // DIRECT FIX: Set isAuthenticated directly
+        setIsAuthenticated(true);
+        
+        // Broadcast authentication change
+        const authEvent = new CustomEvent('auth_state_updated', { 
+          detail: { authenticated: true }
+        });
+        window.dispatchEvent(authEvent);
+        
+        // Navigate instead of reloading
         setTimeout(() => {
-          window.location.reload();
-        }, 100);
+          navigate('/');
+        }, 1500);
       }
     } catch (error) {
       console.error('OTP verification failed:', error);
+      setError('Verification failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (loading || success) return; // Prevent multiple submissions
+    
+    if (!userId) {
+      setError('User ID is missing. Please login again.');
+      return;
+    }
+    
     setLoading(true);
     setError('');
-
+  
     try {
       const sessionId = localStorage.getItem(GUEST_SESSION_ID);
-
+      
+      console.log("Submitting OTP verification with user ID:", userId);
+      
       const response = await authAPI.verifyOTP({
         user_id: userId,
         otp,
         user_session_id: sessionId
       });
-
+  
+      console.log("Verification response:", response);
+  
+      // Show success message immediately
+      setSuccess(true);
+  
       // Store tokens
       localStorage.setItem(ACCESS_TOKEN, response.data.access);
       localStorage.setItem(REFRESH_TOKEN, response.data.refresh);
-
+  
       // Clear guest session data
       sessionStorage.removeItem('user_id');
+      
+      // Store userId in localStorage for persistence
+      if (response.data.user_id) {
+        setUserId(response.data.user_id);
+        localStorage.setItem("userId", response.data.user_id);
+      }
+      
       if (response.data.cart_migrated) {
         localStorage.removeItem(GUEST_SESSION_ID);
       }
-
-      // Important: First update auth state
+  
+      // CRITICAL FIX: Directly set isAuthenticated to true in the auth context
+      setIsAuthenticated(true);
+  
+      // Important: Update auth state with refreshUserProfile 
       await refreshUserProfile();
-
+  
       // Then trigger cart refresh
       await refreshCart();
-
-      // Dispatch a custom event to notify other components
-      window.dispatchEvent(new Event('auth-state-changed'));
-
-      setSuccess(true);
-
-      // Add a small delay before navigation to ensure API calls complete
+  
+      // Broadcast the auth state change using the consistent function
+      refreshAppState('auth', { 
+        isAuthenticated: true,
+        timestamp: Date.now()
+      });
+      
+      // Navigate to home after a delay
       setTimeout(() => {
         navigate('/');
       }, 1500);
     } catch (err) {
+      console.log("Verification error:", err);
       setLoading(false);
       setError(err.response?.data?.error || 'Invalid OTP. Please try again.');
     }
   };
+
+  // REMOVE the useEffect that causes the infinite reload loop
+  // This was causing the page to constantly reload:
+  /*
+  useEffect(() => {
+    if (success) {
+      const reloadTimer = setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+      
+      return () => clearTimeout(reloadTimer);
+    }
+  }, [success]);
+  */
 
   const handleResendOTP = async () => {
     if (!userId) {
@@ -100,12 +181,30 @@ const OTPVerification = () => {
     try {
       const response = await authAPI.resendOTP({ user_id: userId });
       setResendSuccess(true);
+      
+      // Auto-hide resend success message after 5 seconds
+      setTimeout(() => {
+        setResendSuccess(false);
+      }, 5000);
     } catch (err) {
       setError('Failed to resend OTP. Please try again.');
     } finally {
       setResendLoading(false);
     }
   };
+
+  // Show a clean success view when verification is complete
+  if (success) {
+    return (
+      <Box sx={{ mt: 8, textAlign: 'center' }}>
+        <Alert severity="success" sx={{ maxWidth: 400, mx: 'auto' }}>
+          <AlertTitle>Verification Successful</AlertTitle>
+          Your account has been verified. Redirecting you to the dashboard...
+        </Alert>
+        <CircularProgress sx={{ mt: 4 }} />
+      </Box>
+    );
+  }
 
   if (!userId) {
     return (
@@ -143,9 +242,9 @@ const OTPVerification = () => {
           </Alert>
         )}
 
-        {success && (
-          <Alert severity="success" sx={{ width: '100%', mb: 2 }}>
-            {success === true ? 'Verification successful!' : success}
+        {resendSuccess && (
+          <Alert severity="info" sx={{ width: '100%', mb: 2 }}>
+            A new verification code has been sent to your email.
           </Alert>
         )}
 
