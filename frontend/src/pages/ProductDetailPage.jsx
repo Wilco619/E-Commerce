@@ -17,11 +17,14 @@ import {
   Tab,
   Snackbar,
   Skeleton,
+  Card,
+  CardContent,
 } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import { productsAPI, cartAPI } from '../services/api';
 import ShoppingCartIcon from '@mui/icons-material/ShoppingCart';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
+import FlashOnIcon from '@mui/icons-material/FlashOn';
 import { useSnackbar } from 'notistack';
 import { useCart } from '../authentication/CartContext';
 
@@ -32,7 +35,6 @@ const ProductDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState(0);
   const [selectedImage, setSelectedImage] = useState(null);
   const [addingToCart, setAddingToCart] = useState(false);
   const { enqueueSnackbar } = useSnackbar();
@@ -176,72 +178,67 @@ const ProductDetailPage = () => {
     }
   };
 
-  const handleTabChange = (event, newValue) => {
-    setActiveTab(newValue);
-  };
-
   if (loading) {
     return (
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
         <Box sx={{ mb: 3 }}>
           <Skeleton variant="text" width="70%" height={30} />
         </Box>
         
-        <Box display="flex" justifyContent="center">
-          <Box width="90%" maxWidth="1100px">
-            <Grid container spacing={4}>
-              {/* Product Images Skeleton */}
-              <Grid item xs={12} md={6}>
-                <Paper elevation={2} sx={{ p: 2, mb: 2, width: '95%', mx: 'auto' }}>
-                  <Skeleton variant="rectangular" width="100%" height={350} />
-                  <Box sx={{ mt: 2 }}>
-                    <Grid container spacing={1}>
-                      {[1, 2, 3, 4].map((item) => (
-                        <Grid item key={item} xs={3}>
-                          <Skeleton variant="rectangular" width="90%" height={70} />
-                        </Grid>
-                      ))}
-                    </Grid>
-                  </Box>
-                </Paper>
-              </Grid>
-
-              {/* Product Information Skeleton */}
-              <Grid item xs={12} md={6}>
-                <Box sx={{ width: '95%', mx: 'auto' }}>
-                  <Skeleton variant="text" width="80%" height={50} />
-                  <Skeleton variant="text" width="40%" height={40} sx={{ mb: 2 }} />
-                  
-                  <Box sx={{ mb: 3 }}>
-                    <Skeleton variant="text" width="60%" height={30} />
-                    <Skeleton variant="text" width="50%" height={30} />
-                    <Skeleton variant="text" width="40%" height={30} />
-                  </Box>
-                  
-                  <Divider sx={{ mb: 3 }} />
-                  
-                  <Box sx={{ display: 'flex', gap: 2, mb: 4 }}>
-                    <Skeleton variant="rectangular" width="100%" height={50} />
-                    <Skeleton variant="rectangular" width="100%" height={50} />
-                  </Box>
-                  
-                  <Skeleton variant="rectangular" width="50%" height={50} />
+        <Grid container spacing={{ xs: 2, md: 4 }}>
+          {/* Product Images Skeleton */}
+          <Grid item xs={12} md={6}>
+            <Card elevation={3} sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ p: 3 }}>
+                <Skeleton variant="rectangular" width="100%" height={400} sx={{ borderRadius: 2 }} />
+                <Box sx={{ mt: 2 }}>
+                  <Grid container spacing={1}>
+                    {[1, 2, 3, 4].map((item) => (
+                      <Grid item key={item} xs={3}>
+                        <Skeleton variant="rectangular" width="100%" height={70} sx={{ borderRadius: 1 }} />
+                      </Grid>
+                    ))}
+                  </Grid>
                 </Box>
-              </Grid>
-            </Grid>
+              </CardContent>
+            </Card>
+          </Grid>
 
-            {/* Tabs Skeleton */}
-            <Box sx={{ mt: 5 }}>
-              <Skeleton variant="rectangular" width="30%" height={40} sx={{ mb: 2 }} />
-              <Paper elevation={1} sx={{ p: 3, width: '97%', mx: 'auto' }}>
-                <Skeleton variant="text" width="100%" height={30} />
-                <Skeleton variant="text" width="100%" height={30} />
-                <Skeleton variant="text" width="80%" height={30} />
-                <Skeleton variant="text" width="90%" height={30} />
-              </Paper>
-            </Box>
-          </Box>
-        </Box>
+          {/* Product Information Skeleton */}
+          <Grid item xs={12} md={6}>
+            <Card elevation={3} sx={{ borderRadius: 3, height: 'fit-content' }}>
+              <CardContent sx={{ p: 3 }}>
+                <Skeleton variant="text" width="80%" height={50} />
+                <Skeleton variant="text" width="40%" height={40} sx={{ mb: 2 }} />
+                
+                <Box sx={{ mb: 3 }}>
+                  <Skeleton variant="text" width="60%" height={30} />
+                  <Skeleton variant="text" width="50%" height={30} />
+                  <Skeleton variant="text" width="40%" height={30} />
+                </Box>
+                
+                <Divider sx={{ mb: 3 }} />
+                
+                <Box sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                  <Skeleton variant="rectangular" width="48%" height={40} sx={{ borderRadius: 2 }} />
+                  <Skeleton variant="rectangular" width="48%" height={40} sx={{ borderRadius: 2 }} />
+                </Box>
+                
+                <Skeleton variant="rectangular" width="60%" height={35} sx={{ borderRadius: 2 }} />
+              </CardContent>
+            </Card>
+          </Grid>
+        </Grid>
+
+        {/* Description Skeleton */}
+        <Card elevation={3} sx={{ mt: 4, borderRadius: 3 }}>
+          <CardContent sx={{ p: 3 }}>
+            <Skeleton variant="text" width="100%" height={30} />
+            <Skeleton variant="text" width="100%" height={30} />
+            <Skeleton variant="text" width="80%" height={30} />
+            <Skeleton variant="text" width="90%" height={30} />
+          </CardContent>
+        </Card>
       </Container>
     );
   }
@@ -249,10 +246,15 @@ const ProductDetailPage = () => {
   if (error || !product) {
     return (
       <Container maxWidth="lg" sx={{ py: 4 }}>
-        <Alert severity="error" sx={{ mb: 2 }}>
+        <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>
           {error || 'Product not found'}
         </Alert>
-        <Button component={RouterLink} to="/shop" variant="contained">
+        <Button 
+          component={RouterLink} 
+          to="/shop" 
+          variant="contained"
+          sx={{ borderRadius: 2, textTransform: 'none' }}
+        >
           Back to Shop
         </Button>
       </Container>
@@ -260,12 +262,29 @@ const ProductDetailPage = () => {
   }
 
   return (
-    <Container maxWidth="lg" sx={{ py: 4 }}>
-      <Breadcrumbs separator={<NavigateNextIcon fontSize="small" />} sx={{ mb: 3, pl: 2 }}>
-        <Link component={RouterLink} to="/" color="inherit">
+    <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
+      <Breadcrumbs 
+        separator={<NavigateNextIcon fontSize="small" />} 
+        sx={{ 
+          mb: { xs: 2, md: 4 }, 
+          px: 1,
+          display: { xs: 'none', sm: 'flex' } // Hide on extra small screens
+        }}
+      >
+        <Link 
+          component={RouterLink} 
+          to="/" 
+          color="inherit"
+          sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+        >
           Home
         </Link>
-        <Link component={RouterLink} to="/shop" color="inherit">
+        <Link 
+          component={RouterLink} 
+          to="/shop" 
+          color="inherit"
+          sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
+        >
           Shop
         </Link>
         {product.category_slug && (
@@ -273,203 +292,295 @@ const ProductDetailPage = () => {
             component={RouterLink}
             to={`/category/${product.category_slug}`}
             color="inherit"
+            sx={{ textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}
           >
             {product.category}
           </Link>
         )}
-        <Typography color="text.primary">{product.name}</Typography>
+        <Typography color="text.primary" fontWeight={500}>
+          {product.name}
+        </Typography>
       </Breadcrumbs>
 
-      <Box display="flex" justifyContent="center">
-        <Box width="92%" maxWidth="1100px">
-          <Grid container spacing={3}>
-            {/* Product Images */}
-            <Grid item xs={12} md={6}>
-              <Paper elevation={2} sx={{ p: 2, mb: 2, width: '95%', mx: 'auto' }}>
-                <Box
-                  component="img"
-                  src={selectedImage || '/placeholder-product.jpg'}
-                  alt={product.name}
-                  sx={{
-                    width: '100%',
-                    height: 350,
-                    objectFit: 'contain',
-                    mb: 2
-                  }}
-                />
-                
-                {product.images && product.images.length > 1 && (
-                  <Grid container spacing={1}>
-                    {product.images.map((image) => (
-                      <Grid item key={image.id} xs={3}>
-                        <Box
-                          component="img"
-                          src={image.image}
-                          alt={`${product.name} thumbnail`}
-                          onClick={() => setSelectedImage(image.image)}
-                          sx={{
-                            width: '90%',
-                            height: 70,
-                            objectFit: 'cover',
-                            cursor: 'pointer',
-                            border: selectedImage === image.image ? '2px solid #1976d2' : '1px solid #ddd',
-                            borderRadius: 1,
-                            mx: 'auto',
-                            display: 'block'
-                          }}
-                        />
-                      </Grid>
-                    ))}
-                  </Grid>
-                )}
-              </Paper>
-            </Grid>
+      <Grid container spacing={{ xs: 2, md: 4 }}>
+        {/* Product Images */}
+        <Grid item xs={12} md={6}>
+          <Card elevation={3} sx={{ borderRadius: 3 }}>
+            <CardContent sx={{ p: 3 }}>
+              <Box
+                component="img"
+                src={selectedImage || '/placeholder-product.jpg'}
+                alt={product.name}
+                sx={{
+                  width: '100%',
+                  height: { xs: 280, sm: 350, md: 400 },
+                  objectFit: 'contain',
+                  borderRadius: 2,
+                  backgroundColor: 'grey.50',
+                  mb: { xs: 1, md: 2 }
+                }}
+              />
+              
+              {product.images && product.images.length > 1 && (
+                <Grid container spacing={0.5}>
+                  {product.images.map((image) => (
+                    <Grid item key={image.id} xs={3}>
+                      <Box
+                        component="img"
+                        src={image.image}
+                        alt={`${product.name} thumbnail`}
+                        onClick={() => setSelectedImage(image.image)}
+                        sx={{
+                          width: '100%',
+                          height: { xs: 60, sm: 70 },
+                          objectFit: 'cover',
+                          cursor: 'pointer',
+                          border: selectedImage === image.image ? '2px solid' : '1px solid',
+                          borderColor: selectedImage === image.image ? 'primary.main' : 'grey.300',
+                          borderRadius: 1,
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            borderColor: 'primary.main',
+                            transform: 'scale(1.05)'
+                          }
+                        }}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+            </CardContent>
+          </Card>
+        </Grid>
 
-            {/* Product Information */}
-            <Grid item xs={12} md={6}>
-              <Box sx={{ width: '95%', mx: 'auto' }}>
-                <Typography variant="h4" component="h1" gutterBottom>
-                  {product.name}
-                </Typography>
-                
-                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                  {product.discount_price ? (
-                    <>
-                      <Typography variant="h4" color="primary" sx={{ mr: 2, fontSize: "1.7rem" }}>
-                        Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                      </Typography>
-                      <Typography variant="h6" color="error" sx={{ textDecoration: 'line-through' }}>
-                        Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                      </Typography>
-                      <Typography variant="body1" color="error" sx={{ ml: 2 }}>
-                        {Math.round(((product.price - product.discount_price) / product.price) * 100)}% OFF
-                      </Typography>
-                    </>
-                  ) : (
-                    <Typography variant="h4">
+        {/* Product Information */}
+        <Grid item xs={12} md={6}>
+          <Card elevation={3} sx={{ borderRadius: 3, height: 'fit-content' }}>
+            <CardContent sx={{ p: 3 }}>
+              <Typography 
+                variant="h4" 
+                component="h1" 
+                gutterBottom
+                sx={{ 
+                  fontWeight: 600, 
+                  lineHeight: 1.2,
+                  fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+                }}
+              >
+                {product.name}
+              </Typography>
+              
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                mb: 3,
+                flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                gap: { xs: 1, sm: 0 }
+              }}>
+                {product.discount_price ? (
+                  <>
+                    <Typography 
+                      variant="h4" 
+                      color="primary" 
+                      sx={{ 
+                        mr: 2, 
+                        fontWeight: 700,
+                        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+                      }}
+                    >
+                      Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    </Typography>
+                    <Typography 
+                      variant="h6" 
+                      color="orange" 
+                      fontWeight="700"
+                      sx={{ 
+                        textDecoration: 'line-through', 
+                        mr: 1,
+                        fontSize: { xs: '1rem', sm: '1.25rem' }
+                      }}
+                    >
                       Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
                     </Typography>
-                  )}
-                </Box>
-
-                <Box sx={{ mb: 3 }}>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    Category: <strong>{product.category}</strong>
-                  </Typography>
-                  
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    Availability: 
-                    <Box component="span" sx={{ 
-                      color: product.is_available && product.stock > 0 ? 'success.main' : 'error.main',
-                      fontWeight: 'bold',
-                      ml: 1
-                    }}>
-                      {!product.is_available ? 'Not Available' :
-                        product.stock > 0 ? 
-                          product.stock <= 5 ? 
-                            `Low Stock (${product.stock} left)` : 
-                            'In Stock' 
-                          : 'Out of Stock'
-                      }
-                    </Box>
-                  </Typography>
-
-                  {product.is_available && (
-                    <Typography variant="body1" sx={{ 
-                      color: product.stock <= 5 ? 'warning.main' : 'text.primary',
-                      fontWeight: product.stock <= 5 ? 'medium' : 'regular'
-                    }}>
-                      Stock: <strong>{product.stock}</strong> {product.stock === 1 ? 'item' : 'items'} available
-                    </Typography>
-                  )}
-
-                  {/* Show cart quantity if item exists in cart */}
-                  {cart?.items?.find(item => item.product.id === product.id)?.quantity > 0 && (
-                    <Typography variant="body1" sx={{ mt: 1, color: 'info.main' }}>
-                      Currently in cart: <strong>
-                        {cart.items.find(item => item.product.id === product.id).quantity}
-                      </strong>
-                    </Typography>
-                  )}
-                </Box>
-
-                <Divider sx={{ mb: 3 }} />
-
-                {/* Quantity and Add to Cart */}
-                {product.is_available && product.stock > 0 ? (
-                  <>
-                    <Box sx={{ display: 'flex', gap: 2, mb: 4, maxWidth: '90%' }}>
-                      <Button
-                        variant="contained"
-                        startIcon={<ShoppingCartIcon />}
-                        onClick={handleAddToCart}
-                        size="large"
-                        sx={{ py: 1.5, flex: 1 }}
-                        disabled={addingToCart}
-                      >
-                        {addingToCart ? 'Adding...' : 'Add to Cart'}
-                      </Button>
-                      <Button
-                        variant="outlined"
-                        onClick={handleBuyNow}
-                        size="large"
-                        sx={{ py: 1.5, flex: 1 }}
-                        disabled={addingToCart}
-                      >
-                        {addingToCart ? 'Processing...' : 'Buy Now'}
-                      </Button>
-                    </Box>
-
-                    <Button 
-                      variant="contained" 
-                      color="primary"
-                      size="large"
-                      onClick={() => navigate('/')}
-                      sx={{ mt: 1, py: 1.5, width: '80%', maxWidth: 280 }}
-                    >
-                      Continue Shopping
-                    </Button>
                   </>
                 ) : (
-                  <Alert severity="warning" sx={{ mb: 3, maxWidth: '90%' }}>
-                    This product is currently out of stock.
-                  </Alert>
+                  <Typography 
+                    variant="h4" 
+                    color="primary" 
+                    sx={{ 
+                      fontWeight: 700,
+                      fontSize: { xs: '1.5rem', sm: '2rem', md: '2.5rem' }
+                    }}
+                  >
+                    Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                  </Typography>
                 )}
               </Box>
-            </Grid>
-          </Grid>
 
-          {/* Product Description and Details Tabs */}
-          <Box sx={{ mt: 5 }}>
-            <Tabs value={activeTab} onChange={handleTabChange} sx={{ mb: 2, pl: 2 }}>
-              <Tab label="Description" />
-              <Tab label="Additional Information" />
-            </Tabs>
-
-            <Paper elevation={1} sx={{ p: 3, width: '97%', mx: 'auto' }}>
-              {activeTab === 0 && (
-                <Typography variant="body1" component="div" sx={{ whiteSpace: 'pre-line' }}>
-                  {product.description}
+              <Box sx={{ mb: 3 }}>
+                <Typography variant="body1" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                  Category: <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>{product.category}</Box>
                 </Typography>
+                
+                <Typography variant="body1" sx={{ mb: 1.5, color: 'text.secondary' }}>
+                  Availability: 
+                  <Box component="span" sx={{ 
+                    color: product.is_available && product.stock > 0 ? 'success.main' : 'error.main',
+                    fontWeight: 600,
+                    ml: 1
+                  }}>
+                    {!product.is_available ? 'Not Available' :
+                      product.stock > 0 ? 
+                        product.stock <= 5 ? 
+                          `Low Stock (${product.stock} left)` : 
+                          'In Stock' 
+                        : 'Out of Stock'
+                    }
+                  </Box>
+                </Typography>
+
+                {product.is_available && (
+                  <Typography variant="body1" sx={{ 
+                    color: product.stock <= 5 ? 'warning.main' : 'text.secondary',
+                    fontWeight: product.stock <= 5 ? 600 : 400
+                  }}>
+                    Stock: <Box component="span" sx={{ color: 'text.primary', fontWeight: 500 }}>
+                      {product.stock}
+                    </Box> {product.stock === 1 ? 'item' : 'items'} available
+                  </Typography>
+                )}
+
+                {/* Show cart quantity if item exists in cart */}
+                {cart?.items?.find(item => item.product.id === product.id)?.quantity > 0 && (
+                  <Box
+                    sx={{
+                      mt: 1.5,
+                      p: 1.5,
+                      backgroundColor: 'info.light',
+                      borderRadius: 2,
+                      border: '1px solid',
+                      borderColor: 'info.main'
+                    }}
+                  >
+                    <Typography variant="body2" sx={{ color: 'info.dark', fontWeight: 500 }}>
+                      Currently in cart: {cart.items.find(item => item.product.id === product.id).quantity} item(s)
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+
+              <Divider sx={{ mb: 3 }} />
+
+              {/* Action Buttons */}
+              {product.is_available && product.stock > 0 ? (
+                <>
+                  <Box sx={{ 
+                    display: 'flex', 
+                    gap: { xs: 1, sm: 1.5 }, 
+                    mb: 2,
+                    flexDirection: { xs: 'column', sm: 'row' }
+                  }}>
+                    <Button
+                      variant="contained"
+                      startIcon={<ShoppingCartIcon />}
+                      onClick={handleAddToCart}
+                      disabled={addingToCart}
+                      sx={{ 
+                        flex: { xs: '1 1 auto', sm: 1 },
+                        py: { xs: 1.5, sm: 1 },
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: { xs: '1rem', sm: '0.9rem' }
+                      }}
+                    >
+                      {addingToCart ? 'Adding...' : 'Add to Cart'}
+                    </Button>
+                    <Button
+                      variant="outlined"
+                      startIcon={<FlashOnIcon />}
+                      onClick={handleBuyNow}
+                      disabled={addingToCart}
+                      sx={{ 
+                        flex: { xs: '1 1 auto', sm: 1 },
+                        py: { xs: 1.5, sm: 1 },
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 500,
+                        fontSize: { xs: '1rem', sm: '0.9rem' }
+                      }}
+                    >
+                      {addingToCart ? 'Processing...' : 'Buy Now'}
+                    </Button>
+                  </Box>
+
+                  <Button 
+                    variant="text" 
+                    onClick={() => navigate('/shop')}
+                    sx={{ 
+                      py: 0.75,
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 400,
+                      fontSize: '0.85rem',
+                      color: 'text.secondary',
+                      '&:hover': {
+                        backgroundColor: 'action.hover'
+                      }
+                    }}
+                  >
+                    Continue Shopping
+                  </Button>
+                </>
+              ) : (
+                <Alert 
+                  severity="warning" 
+                  sx={{ 
+                    borderRadius: 2,
+                    '& .MuiAlert-message': {
+                      fontSize: '0.9rem'
+                    }
+                  }}
+                >
+                  This product is currently out of stock.
+                </Alert>
               )}
-              
-              {activeTab === 1 && (
-                <Box>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>SKU:</strong> {product.id}
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Added:</strong> {new Date(product.created_at).toLocaleDateString()}
-                  </Typography>
-                  <Typography variant="body1" sx={{ mb: 1 }}>
-                    <strong>Last Updated:</strong> {new Date(product.updated_at).toLocaleDateString()}
-                  </Typography>
-                </Box>
-              )}
-            </Paper>
-          </Box>
-        </Box>
-      </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* Product Description */}
+      {product.description && (
+        <Card elevation={3} sx={{ 
+          mt: { xs: 2, md: 4 }, 
+          borderRadius: 3 
+        }}>
+          <CardContent sx={{ 
+            p: { xs: 2, md: 3 }
+          }}>
+            <Typography 
+              variant="h6" 
+              gutterBottom 
+              sx={{ fontWeight: 600, mb: 2 }}
+            >
+              Product Description
+            </Typography>
+            <Typography 
+              variant="body1" 
+              component="div" 
+              sx={{ 
+                whiteSpace: 'pre-line',
+                lineHeight: 1.7,
+                color: 'text.secondary',
+                fontSize: { xs: '0.9rem', sm: '1rem' }
+              }}
+            >
+              {product.description}
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
     </Container>
   );
 };

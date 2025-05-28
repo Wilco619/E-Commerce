@@ -33,12 +33,12 @@ SECRET_KEY = 'django-insecure-4d3kde!!&dy9ehyn13u00y$v*cg1+=f$7k3*)rnc1-0=2y0)as
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-# ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke','api.jemsa.co.ke','www.api.jemsa.co.ke']
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = ['jemsa.co.ke','www.jemsa.co.ke','api.jemsa.co.ke','www.api.jemsa.co.ke']
+# ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
-    # "https://jemsa.co.ke",
-    # "https://www.jemsa.co.ke",
-    "http://localhost:5173",  
+    "https://jemsa.co.ke",
+    "https://www.jemsa.co.ke",
+    # "http://localhost:5173",  
     
 ]
 
@@ -140,23 +140,23 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-DATABASES = {
-  'default': {
-      'ENGINE': 'django.db.backends.sqlite3',
-      'NAME': BASE_DIR / 'db.sqlite3',
-  }
-}
-
 # DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.mysql',
-#         'NAME': 'dablvqsi_jemsadb001',
-#         'USER': 'dablvqsi_db001jemsa',
-#         'PASSWORD': 'db001Jemsa#',
-#         'HOST': 'localhost',
-#         'PORT': '3306',
-#     }
+#   'default': {
+#       'ENGINE': 'django.db.backends.sqlite3',
+#       'NAME': BASE_DIR / 'db.sqlite3',
+#   }
 # }
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': 'dablvqsi_jemsadb001',
+        'USER': 'dablvqsi_db001jemsa',
+        'PASSWORD': 'db001Jemsa#',
+        'HOST': 'localhost',
+        'PORT': '3306',
+    }
+}
 
 
 # Password validation
@@ -206,7 +206,7 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 # Frontend URL Configuration
-FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
+FRONTEND_URL = os.getenv('FRONTEND_URL', "https://jemsa.co.ke")
 
 # Email settings
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
@@ -295,9 +295,9 @@ CSRF_COOKIE_SAMESITE = 'Lax'  # Same as above for CSRF cookies
 
 # Add these new settings
 CSRF_TRUSTED_ORIGINS = [
-    # 'https://jemsa.co.ke',
-    # 'https://www.jemsa.co.ke',
-    'http://localhost:5173',
+    'https://jemsa.co.ke',
+    'https://www.jemsa.co.ke',
+    # 'http://localhost:5173',
     # Add your production domains here
 ]
 
@@ -311,7 +311,7 @@ CSRF_TRUSTED_ORIGINS = [
 if DEBUG:
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
-    ALLOWED_HOSTS += ['localhost', '127.0.0.1']
+    # ALLOWED_HOSTS += ['localhost', '127.0.0.1']
     CORS_ALLOWED_ORIGINS += [
         # "http://localhost:5173",
         # "http://127.0.0.1:5173",

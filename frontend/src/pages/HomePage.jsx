@@ -280,14 +280,6 @@ const HomePage = () => {
           >
             <PopularProducts products={popularProducts} />
           </LazyLoadComponent>
-
-          {/* Newsletter */}
-          <LazyLoadComponent 
-            height={200} 
-            skeleton={<NewsletterSkeleton />}
-          >
-            <Newsletter />
-          </LazyLoadComponent>
         </Box>
       </Container>
     </Box>

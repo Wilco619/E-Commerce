@@ -9,32 +9,28 @@ import IconButton from '@mui/material/IconButton';
 
 const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) => {
   const theme = useTheme();
-  // Create refs for navigation
   const prevRef = useRef(null);
   const nextRef = useRef(null);
   
-  // Ensure we have an array, even if products is null or undefined
   const featuredProducts = Array.isArray(products) ? products : [];
 
   return (
     <Box sx={{ 
-      mb: { xs: 4, md: 6 },
-      mt: { xs: 5, md: 7 },
+      mb: { xs: 3, md: 4 },
+      mt: { xs: 4, md: 5 },
       overflow: 'hidden',
       width: '100%',
       mx: 0
     }}>
+      {/* Updated Elegant Header */}
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
         mb: 3,
-        borderBottom: '2px solid',
-        borderColor: 'primary.light',
-        pb: 1,
         px: { xs: 2, sm: 2 }
       }}>
         <Typography
-          variant="h3"
+          variant="h4"
           sx={{
             textDecoration: 'none',
             color: 'inherit',
@@ -42,11 +38,40 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
             letterSpacing: 0.5,
             display: 'flex',
             alignItems: 'center',
-            fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' }
+            fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2.2rem' },
+            position: 'relative',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -12,
+              left: 0,
+              width: '100%',
+              height: '2px',
+              backgroundColor: theme.palette.primary.light,
+              borderRadius: '1px'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              bottom: -12,
+              left: 0,
+              width: '80px',
+              height: '2px',
+              backgroundColor: theme.palette.secondary.main,
+              borderRadius: '1px',
+              zIndex: 1
+            }
           }}
         >
           Featured
-          <Box component="span" sx={{ color: theme.palette.secondary.main }}>
+          <Box 
+            component="span" 
+            sx={{ 
+              color: theme.palette.secondary.main, 
+              ml: 1,
+              fontWeight: 700
+            }}
+          >
             Products
           </Box>
         </Typography>
@@ -61,13 +86,15 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
               overflow: 'visible',
               px: { xs: 1, sm: 2 }
             },
-            '.swiper-wrapper': {
-              display: 'flex',
-              flexDirection: 'row',
-              flexWrap: 'nowrap',
-            },
             '.swiper-pagination': {
-              bottom: 0
+              bottom: -10,
+              '& .swiper-pagination-bullet': {
+                bgcolor: 'primary.main',
+                opacity: 0.4,
+                '&.swiper-pagination-bullet-active': {
+                  opacity: 1,
+                }
+              }
             }
           }}
         >
@@ -75,7 +102,7 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
             ref={prevRef}
             sx={{
               position: 'absolute',
-              left: 8,
+              left: { xs: 4, sm: 8 },
               top: '50%',
               transform: 'translateY(-50%)',
               zIndex: 10,
@@ -85,10 +112,14 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
             <IconButton
               size="small"
               sx={{
-                bgcolor: 'background.paper',
-                boxShadow: 2,
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(10px)',
+                boxShadow: 3,
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
                 '&:hover': {
-                  bgcolor: 'grey.100'
+                  bgcolor: 'background.paper',
+                  transform: 'scale(1.1)',
                 }
               }}
             >
@@ -98,7 +129,7 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
           
           <Swiper
             modules={[Autoplay, Pagination, Navigation]}
-            spaceBetween={10}
+            spaceBetween={8}
             slidesPerView="auto"
             autoplay={{
               delay: 5000,
@@ -112,23 +143,22 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
               nextEl: nextRef.current,
             }}
             onBeforeInit={(swiper) => {
-              // Update Swiper with navigation elements when Swiper is initialized
               if (swiper.params.navigation) {
                 swiper.params.navigation.prevEl = prevRef.current;
                 swiper.params.navigation.nextEl = nextRef.current;
               }
             }}
             style={{ 
-              padding: '10px 0 30px',
+              padding: '10px 0 40px',
               display: 'flex',
               width: '100%'
             }}
             breakpoints={{
-              320: { slidesPerView: 2.2, spaceBetween: 10 },
-              480: { slidesPerView: 3.2, spaceBetween: 10 },
-              768: { slidesPerView: 4.2, spaceBetween: 10 },
-              1024: { slidesPerView: 5.2, spaceBetween: 10 },
-              1200: { slidesPerView: 6.2, spaceBetween: 10 }
+              320: { slidesPerView: 2.3, spaceBetween: 8 },
+              480: { slidesPerView: 3.2, spaceBetween: 8 },
+              768: { slidesPerView: 4.5, spaceBetween: 10 },
+              1024: { slidesPerView: 5.8, spaceBetween: 10 },
+              1200: { slidesPerView: 6.5, spaceBetween: 12 }
             }}
           >
             {featuredProducts.map((product) => (
@@ -138,27 +168,14 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
                   height: 'auto',
                   display: 'flex',
                   justifyContent: 'center',
-                  width: '85%'
+                  width: 'auto'
                 }}
               >
-                <Box sx={{ 
-                  width: '100%',
-                  '& .MuiPaper-root': {
-                    width: '100%',
-                    height: '100%',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    '&:hover': {
-                      transform: 'translateY(-4px)',
-                      boxShadow: '0 6px 12px rgba(0,0,0,0.1)'
-                    }
-                  }
-                }}>
-                  <ProductCard 
-                    product={product} 
-                    setSelectedImage={setSelectedImage}
-                    compact
-                  />
-                </Box>
+                <ProductCard 
+                  product={product} 
+                  setSelectedImage={setSelectedImage}
+                  compact
+                />
               </SwiperSlide>
             ))}
           </Swiper>
@@ -167,7 +184,7 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
             ref={nextRef}
             sx={{
               position: 'absolute',
-              right: 8,
+              right: { xs: 4, sm: 8 },
               top: '50%',
               transform: 'translateY(-50%)',
               zIndex: 10,
@@ -177,10 +194,14 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
             <IconButton
               size="small"
               sx={{
-                bgcolor: 'background.paper',
-                boxShadow: 2,
+                bgcolor: 'rgba(255, 255, 255, 0.9)',
+                backdropFilter: 'blur(10px)',
+                boxShadow: 3,
+                width: { xs: 32, sm: 40 },
+                height: { xs: 32, sm: 40 },
                 '&:hover': {
-                  bgcolor: 'grey.100'
+                  bgcolor: 'background.paper',
+                  transform: 'scale(1.1)',
                 }
               }}
             >
@@ -189,9 +210,22 @@ const FeaturedProducts = ({ products = [], isSmallScreen, setSelectedImage }) =>
           </Box>
         </Box>
       ) : (
-        <Typography variant="body1" align="center">
-          No featured products available at the moment.
-        </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 4,
+            backgroundColor: theme.palette.grey[50],
+            borderRadius: 2,
+            border: `1px dashed ${theme.palette.grey[300]}`,
+            mx: 2
+          }}
+        >
+          <Typography variant="body1" color="text.secondary">
+            No featured products available at the moment.
+          </Typography>
+        </Box>
       )}
     </Box>
   );

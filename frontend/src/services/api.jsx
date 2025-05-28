@@ -2,9 +2,9 @@ import axios from "axios";
 import { ACCESS_TOKEN, REFRESH_TOKEN, GUEST_SESSION_ID } from "./constants";
 import { getCookie } from '../utils/cookieUtils';
 
-// const apiUrl = "https://api.jemsa.co.ke/api/";
+const apiUrl = "https://api.jemsa.co.ke/api/";
 
-const apiUrl = "http://127.0.0.1:8000/api/";
+// const apiUrl = "http://127.0.0.1:8000/api/";
 // Base URL with /api/ prefix to match Django router patterns
 
 const API = axios.create({
@@ -435,6 +435,7 @@ const cartAPI = {
 const orderAPI = {
   getOrders: () => API.get('/orders/'),
   getOrder: (orderId) => API.get(`/orders/${orderId}/`),
+  getCurrentUserOrders: () => API.get('/orders/my-orders/'),
   checkout: async (checkoutData) => {
     console.log('Checkout request data:', checkoutData);
     try {

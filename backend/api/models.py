@@ -146,9 +146,7 @@ class Product(models.Model):
         return self.is_available and actual_available >= requested_quantity
 
     def save(self, *args, **kwargs):
-        if not self.sku:
-            # Generate SKU if not provided
-            self.sku = f'SKU-{timezone.now().strftime("%Y%m%d")}-{str(uuid4())[:8]}'
+        
         if not self.slug:
             # Generate base slug from name
             base_slug = slugify(self.name)

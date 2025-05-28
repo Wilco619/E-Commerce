@@ -632,14 +632,6 @@ const ShopPage = () => {
                       {product.name}
                     </Typography>
                     
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ display: 'block', mt: 0.5 }}
-                    >
-                      {product.category_name}
-                    </Typography>
-                    
                     <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
                       {product.discount_price ? (
                         <>

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../authentication/AuthContext'; // Add this import
 import { 
   Box, 
   Container, 
@@ -22,6 +23,8 @@ import { orderAPI } from '../../services/api';
 
 const OrderDetailPage = () => {
   const { orderId } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth(); // Add this
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -31,20 +34,36 @@ const OrderDetailPage = () => {
       try {
         setLoading(true);
         const response = await orderAPI.getOrder(orderId);
+        
+        // Check if order belongs to current user
+        if (response.data.user !== user.id) {
+          navigate('/orders');
+          return;
+        }
+        
         setOrder(response.data);
         setError(null);
       } catch (err) {
-        setError('Failed to load order details. Please try again later.');
+        if (err.response?.status === 404) {
+          setError('Order not found or you do not have permission to view it.');
+        } else {
+          setError('Failed to load order details. Please try again later.');
+        }
         console.error('Error fetching order:', err);
       } finally {
         setLoading(false);
       }
     };
 
+    if (!user) {
+      navigate('/login');
+      return;
+    }
+
     if (orderId) {
       fetchOrder();
     }
-  }, [orderId]);
+  }, [orderId, user, navigate]);
 
   const getStatusColor = (status) => {
     switch (status) {

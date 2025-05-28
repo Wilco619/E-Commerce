@@ -21,7 +21,9 @@ import {
   Paper,
   Skeleton,
   Tooltip, 
-  IconButton
+  IconButton,
+  Pagination,
+  Stack
 } from '@mui/material';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import AddShoppingCartIcon from '@mui/icons-material/AddShoppingCart';
@@ -39,9 +41,14 @@ const CategoryPage = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalProducts, setTotalProducts] = useState(0);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  
+  const productsPerPage = 20;
   
   // Use the cart context instead of managing cart state locally
   const { addToCart, loading: cartLoading, fetchCart, cart } = useCart();
@@ -53,11 +60,30 @@ const CategoryPage = () => {
         setLoading(true);
         const [categoryResponse, productsResponse] = await Promise.all([
           productsAPI.getCategory(slug),
-          productsAPI.getCategoryProducts(slug)
+          productsAPI.getCategoryProducts(slug, {
+            page: currentPage,
+            page_size: productsPerPage
+          })
         ]);
 
         setCategoryDetails(categoryResponse.data);
-        setProducts(productsResponse.data.results || productsResponse.data);
+        
+        // Handle different response structures
+        if (productsResponse.data.results) {
+          // Paginated response
+          setProducts(productsResponse.data.results);
+          setTotalProducts(productsResponse.data.count);
+          setTotalPages(Math.ceil(productsResponse.data.count / productsPerPage));
+        } else {
+          // Non-paginated response - implement client-side pagination
+          const allProducts = productsResponse.data;
+          setTotalProducts(allProducts.length);
+          setTotalPages(Math.ceil(allProducts.length / productsPerPage));
+          
+          const startIndex = (currentPage - 1) * productsPerPage;
+          const endIndex = startIndex + productsPerPage;
+          setProducts(allProducts.slice(startIndex, endIndex));
+        }
         
       } catch (err) {
         setError('Failed to load category. Please try again later.');
@@ -68,7 +94,13 @@ const CategoryPage = () => {
     };
 
     fetchCategoryData();
-  }, [slug]);
+  }, [slug, currentPage]);
+
+  const handlePageChange = (event, value) => {
+    setCurrentPage(value);
+    // Scroll to top when changing pages
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleAddToCart = async (product) => {
     if (!product.is_available || product.stock <= 0) {
@@ -104,7 +136,7 @@ const CategoryPage = () => {
     }
   };
 
-  // Render product card
+  // Render product card with image taking full height and overlay content
   const renderProductCard = (product) => {
     const isOutOfStock = !product.is_available || product.stock <= 0;
     const isLowStock = product.stock <= 5 && product.stock > 0;
@@ -113,269 +145,245 @@ const CategoryPage = () => {
     
     return (
       <Card 
-        elevation={3} // Increased elevation for better visibility
+        elevation={2}
+        component={RouterLink}
+        to={`/product/${product.slug}`}
         sx={{ 
-          height: '100%', 
-          display: 'flex', 
-          flexDirection: 'column',
-          transition: 'transform 0.2s, box-shadow 0.2s',
+          width: '100%',
+          textDecoration: 'none',
+          color: 'inherit',
+          height: isMobile ? '200px' : isTablet ? '240px' : '280px', // Reduced heights
+          position: 'relative',
+          transition: 'all 0.3s ease',
           '&:hover': {
             transform: 'translateY(-4px)',
-            boxShadow: 8, // Increased shadow on hover
+            boxShadow: 6,
           },
           borderRadius: 2,
           overflow: 'hidden',
-          border: `1px solid ${theme.palette.divider}` // Added border for better definition
+          display: 'flex',
+          flexDirection: 'column'
         }}
       >
-        <Box sx={{ position: 'relative' }}>
-          {product.discount_price && (
-            <Chip
-              label={`${Math.round((1 - product.discount_price / product.price) * 100)}% OFF`}
-              color="error"
-              size="small"
-              sx={{
-                position: 'absolute',
-                top: 12,
-                right: 12,
-                fontWeight: 'bold',
-                zIndex: 2,
-                boxShadow: '0 2px 4px rgba(0,0,0,0.2)' // Added shadow to chip
+        {/* Product Image Container */}
+        <Box
+          sx={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            backgroundColor: 'grey.100'
+          }}
+        >
+          {product.feature_image ? (
+            <CardMedia
+              component="img"
+              image={product.feature_image}
+              alt={product.name}
+              sx={{ 
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transition: 'transform 0.3s ease',
+                '&:hover': {
+                  transform: 'scale(1.05)'
+                }
               }}
             />
+          ) : (
+            <Box
+              sx={{
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}
+            >
+              <ShoppingBagIcon sx={{ fontSize: isMobile ? 40 : 60, color: 'grey.400' }} />
+            </Box>
           )}
-          
+
+          {/* Dark Overlay */}
           <Box
             sx={{
-              height: 240, // Increased height for better visibility
-              backgroundColor: 'grey.50',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 30%, rgba(0, 0, 0, 0.44) 70%, rgba(0,0,0,0.85) 100%)',
+              zIndex: 1,
+              transition: 'all 0.3s ease',
+              '&:hover': {
+                background: 'linear-gradient(180deg, rgba(0,0,0,0.1) 0%, rgba(0,0,0,0.3) 30%, rgba(0,0,0,0.8) 70%, rgba(0,0,0,0.9) 100%)',
+              }
+            }}
+          />
+
+          {/* Content Overlays */}
+          <Box
+            sx={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              zIndex: 2,
               display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              overflow: 'hidden',
-              borderBottom: `1px solid ${theme.palette.divider}`
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              p: isMobile ? 1 : 1.5 // Reduced padding
             }}
           >
-            {product.feature_image ? (
-              <CardMedia
-                component="img"
-                height="220"
-                image={product.feature_image}
-                alt={product.name}
+            {/* Top Row - Status Chips */}
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              {/* Stock Status */}
+              <Box>
+                {isOutOfStock ? (
+                  <Chip 
+                    label="Out of Stock" 
+                    color="error"
+                    size="small"
+                    sx={{ 
+                      backgroundColor: 'rgba(244, 67, 54, 0.9)',
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: isMobile ? '0.6rem' : '0.7rem',
+                      height: isMobile ? '18px' : '24px'
+                    }}
+                  />
+                ) : isLowStock ? (
+                  <Chip 
+                    label={`Only ${product.stock} left`}
+                    color="warning"
+                    size="small"
+                    sx={{ 
+                      backgroundColor: 'rgba(255, 152, 0, 0.9)',
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: isMobile ? '0.6rem' : '0.7rem',
+                      height: isMobile ? '18px' : '24px'
+                    }}
+                  />
+                ) : null}
+              </Box>
+
+              {/* Discount Badge */}
+              {product.discount_price && (
+                <Chip
+                  label={`${Math.round((1 - product.discount_price / product.price) * 100)}% OFF`}
+                  color="error"
+                  size="small"
+                  sx={{
+                    backgroundColor: 'rgba(244, 67, 54, 0.95)',
+                    color: 'white',
+                    fontWeight: 700,
+                    fontSize: isMobile ? '0.6rem' : '0.7rem',
+                    height: isMobile ? '18px' : '24px'
+                  }}
+                />
+              )}
+            </Box>
+
+            {/* Bottom Content */}
+            <Box>
+              <Typography 
+                variant="h6"
                 sx={{ 
-                  objectFit: 'contain',
-                  width: '85%', // Control width to prevent stretching
-                  maxHeight: '220px',
-                  margin: '0 auto',
-                  transition: 'transform 0.3s',
-                  '&:hover': {
-                    transform: 'scale(1.05)'
-                  }
+                  color: 'white',
+                  fontSize: isMobile ? '0.75rem' : isTablet ? '0.85rem' : '0.95rem',
+                  fontWeight: 600,
+                  mb: isMobile ? 0.5 : 1,
+                  textShadow: '0 2px 4px rgba(0,0,0,0.5)',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  lineHeight: 1.2
                 }}
-              />
-            ) : (
-              <ShoppingBagIcon sx={{ fontSize: 80, color: 'grey.300' }} />
-            )}
+              >
+                {product.name}
+              </Typography>
+
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                flexWrap: isMobile ? 'wrap' : 'nowrap',
+                gap: isMobile ? 0.5 : 1
+              }}>
+                <Box sx={{ minWidth: 0, flex: 1 }}>
+                  {product.discount_price ? (
+                    <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5, flexWrap: 'wrap' }}>
+                          <Typography 
+                            sx={{ 
+                              color: 'orange',
+                              textDecoration: 'line-through',
+                              fontWeight: 700,
+                              fontSize: isMobile ? '0.65rem' : '0.75rem',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                          </Typography>
+                          <Typography 
+                            sx={{ 
+                              color: '#4CAF50',
+                              fontWeight: 700,
+                              fontSize: isMobile ? '0.8rem' : '0.9rem',
+                              whiteSpace: 'nowrap'
+                            }}
+                          >
+                            Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                          </Typography>
+                      </Box>
+                  ) : (
+                    <Typography 
+                      sx={{ 
+                        color: '#4CAF50',
+                        fontWeight: 700,
+                        fontSize: isMobile ? '0.8rem' : '0.9rem',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
+                    </Typography>
+                  )}
+                </Box>
+
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={isMobile ? null : <AddShoppingCartIcon />}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleAddToCart(product);
+                  }}
+                  disabled={!canAddToCart || cartLoading}
+                  sx={{ 
+                    borderRadius: 1.5,
+                    textTransform: 'none',
+                    backgroundColor: 'primary.main',
+                    minWidth: isMobile ? '50px' : 'auto',
+                    fontSize: isMobile ? '0.7rem' : '0.75rem',
+                    px: isMobile ? 1 : 1.5,
+                    py: isMobile ? 0.5 : 0.75,
+                    flexShrink: 0,
+                    '&:hover': {
+                      backgroundColor: 'primary.dark'
+                    }
+                  }}
+                >
+                  {isMobile ? (
+                    <AddShoppingCartIcon sx={{ fontSize: '16px' }} />
+                  ) : (
+                    cartLoading ? 'Adding...' : 'Add'
+                  )}
+                </Button>
+              </Box>
+            </Box>
           </Box>
         </Box>
-  
-        <CardContent sx={{ flexGrow: 1, p: 2, pt: 2 }}>
-          <Typography 
-            gutterBottom 
-            variant="h6" 
-            component="h2" 
-            sx={{ 
-              fontWeight: 600, // Increased font weight for better visibility
-              fontSize: '1.1rem',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              display: '-webkit-box',
-              WebkitLineClamp: 2,
-              WebkitBoxOrient: 'vertical',
-              lineHeight: 1.3,
-              height: '2.6em',
-              color: theme.palette.text.primary, // Ensure good contrast
-              mb: 1.5 // Add more space after title
-            }}
-          >
-            {product.name}
-          </Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'baseline', mb: 1.5 }}>
-            {product.discount_price ? (
-              <>
-                <Typography 
-                  variant={isMobile ? "body1" : "h6"}
-                  color="primary" 
-                  sx={{ 
-                    fontWeight: 'bold', 
-                    mr: 1.5, // More spacing between prices
-                    fontSize: isMobile ? '1.1rem' : '1.25rem' // Larger font size
-                  }}
-                >
-                  Ksh{product.discount_price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                </Typography>
-                <Typography 
-                  variant="body2" 
-                  color="text.secondary" 
-                  sx={{ 
-                    textDecoration: 'line-through',
-                    fontSize: isMobile ? '0.85rem' : '0.95rem'
-                  }}
-                >
-                  Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-                </Typography>
-              </>
-            ) : (
-              <Typography 
-                variant={isMobile ? "body1" : "h6"} 
-                color="primary" 
-                sx={{ 
-                  fontWeight: 'bold',
-                  fontSize: isMobile ? '1.1rem' : '1.25rem'
-                }}
-              >
-                Ksh{product.price.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
-              </Typography>
-            )}
-          </Box>
-          
-          <Box 
-            sx={{ 
-              mt: 1,
-              mb: 1,
-              display: 'flex',
-              alignItems: 'center',
-              height: '24px' // Fixed height for stock status
-            }}
-          >
-            {isOutOfStock ? (
-              <Chip 
-                label="Out of Stock" 
-                color="error" 
-                size="small"
-                sx={{ 
-                  borderRadius: 1,
-                  fontWeight: 500
-                }}
-              />
-            ) : isLowStock ? (
-              <Typography 
-                variant="body2" 
-                color="warning.main" 
-                sx={{ 
-                  fontWeight: 600,
-                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(237, 108, 2, 0.1)' : 'rgba(237, 108, 2, 0.1)',
-                  px: 1,
-                  py: 0.5,
-                  borderRadius: 1,
-                  display: 'inline-block'
-                }}
-              >
-                Only {product.stock} left
-              </Typography>
-            ) : (
-              <Typography 
-                variant="body2" 
-                color="success.main" 
-                sx={{ 
-                  fontWeight: 600,
-                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(46, 125, 50, 0.1)' : 'rgba(46, 125, 50, 0.1)',
-                  px: 1,
-                  py: 0.5,
-                  borderRadius: 1,
-                  display: 'inline-block'
-                }}
-              >
-                In Stock
-              </Typography>
-            )}
-          </Box>
-        </CardContent>
-        
-        <CardActions sx={{ px: 2, pb: 2, pt: 0, gap: 1 }}>
-          {isMobile ? (
-            // Mobile view - improved icon buttons
-            <>
-              <Tooltip title="View Details">
-                <IconButton
-                  component={RouterLink}
-                  to={`/product/${product.slug}`}
-                  color="primary"
-                  sx={{ 
-                    flexGrow: 1,
-                    border: `1px solid ${theme.palette.primary.main}`,
-                    borderRadius: 1.5,
-                    height: '40px' // Fixed height for buttons
-                  }}
-                >
-                  <VisibilityIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title="Add to Cart">
-                <span>
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleAddToCart(product)}
-                    disabled={!canAddToCart || cartLoading}
-                    sx={{ 
-                      flexGrow: 1,
-                      backgroundColor: 'primary.main',
-                      color: 'primary.contrastText',
-                      borderRadius: 1.5,
-                      height: '40px', // Fixed height for buttons
-                      '&:hover': {
-                        backgroundColor: 'primary.dark',
-                      },
-                      '&.Mui-disabled': {
-                        backgroundColor: 'action.disabledBackground',
-                        color: 'action.disabled',
-                      }
-                    }}
-                  >
-                    <AddShoppingCartIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            </>
-          ) : (
-            // Desktop view - improved text + icon buttons
-            <>
-              <Button 
-                variant="outlined"
-                size="medium" // Changed from small to medium
-                startIcon={<VisibilityIcon />}
-                component={RouterLink} 
-                to={`/product/${product.slug}`}
-                sx={{ 
-                  flexGrow: 1,
-                  borderRadius: 1.5,
-                  textTransform: 'none',
-                  fontWeight: 600, // Increased weight
-                  py: 1 // Added padding
-                }}
-              >
-                View Details
-              </Button>
-              <Button
-                variant="contained"
-                size="medium" // Changed from small to medium
-                startIcon={<AddShoppingCartIcon />}
-                onClick={() => handleAddToCart(product)}
-                disabled={!canAddToCart || cartLoading}
-                sx={{ 
-                  flexGrow: 1,
-                  borderRadius: 1.5,
-                  textTransform: 'none',
-                  fontWeight: 600, // Increased weight
-                  py: 1 // Added padding
-                }}
-              >
-                {cartLoading ? 'Adding...' : 'Add to Cart'}
-              </Button>
-            </>
-          )}
-        </CardActions>
       </Card>
     );
   };
@@ -389,18 +397,15 @@ const CategoryPage = () => {
         <Box sx={{ mb: 4 }}>
           <Skeleton variant="text" width="40%" height={50} />
           <Skeleton variant="text" width="80%" height={25} />
-          <Skeleton variant="text" width="80%" height={25} />
         </Box>
-        <Grid container spacing={3}>
-          {[1, 2, 3, 4, 5, 6].map((item) => (
-            <Grid item key={item} xs={6} sm={6} md={4} lg={4}>
-              <Skeleton variant="rectangular" height={200} sx={{ borderRadius: 2 }} />
-              <Skeleton variant="text" height={30} sx={{ mt: 1 }} />
-              <Skeleton variant="text" width="60%" height={25} />
-              <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
-                <Skeleton variant="rectangular" width="50%" height={36} />
-                <Skeleton variant="rectangular" width="50%" height={36} />
-              </Box>
+        <Grid container spacing={2}>
+          {[1, 2, 3, 4, 5, 6, 7, 8].map((item) => (
+            <Grid item key={item} xs={6} sm={4} md={3} lg={3}>
+              <Skeleton 
+                variant="rectangular" 
+                height={isMobile ? 200 : isTablet ? 240 : 280} 
+                sx={{ borderRadius: 1.5 }} 
+              />
             </Grid>
           ))}
         </Grid>
@@ -499,25 +504,55 @@ const CategoryPage = () => {
             {categoryDetails.description}
           </Typography>
         )}
+        
+        {/* Products count */}
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+          {totalProducts} product{totalProducts !== 1 ? 's' : ''} found
+        </Typography>
       </Paper>
 
       {/* Product Grid */}
       {products.length > 0 ? (
-        <Grid container spacing={3}>
-          {products.map((product) => (
-            <Grid 
-              item 
-              key={product.id} 
-              xs={6} 
-              sm={6} 
-              md={4} 
-              lg={4}
-              sx={{ display: 'flex' }}
-            >
-              {renderProductCard(product)}
-            </Grid>
-          ))}
-        </Grid>
+        <>
+          <Grid container spacing={2}>
+            {products.map((product) => (
+              <Grid 
+                item 
+                key={product.id} 
+                xs={6} 
+                sm={4} 
+                md={3} 
+                lg={3}
+                sx={{ display: 'flex' }}
+              >
+                {renderProductCard(product)}
+              </Grid>
+            ))}
+          </Grid>
+          
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <Stack spacing={2} alignItems="center" sx={{ mt: 4 }}>
+              <Pagination
+                count={totalPages}
+                page={currentPage}
+                onChange={handlePageChange}
+                color="primary"
+                size={isMobile ? "small" : "medium"}
+                showFirstButton
+                showLastButton
+                sx={{
+                  '& .MuiPaginationItem-root': {
+                    borderRadius: 1.5,
+                  }
+                }}
+              />
+              <Typography variant="body2" color="text.secondary">
+                Showing {((currentPage - 1) * productsPerPage) + 1} - {Math.min(currentPage * productsPerPage, totalProducts)} of {totalProducts} products
+              </Typography>
+            </Stack>
+          )}
+        </>
       ) : (
         <Paper 
           elevation={3}

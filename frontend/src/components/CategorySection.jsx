@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, Grid, Paper, useTheme } from '@mui/material';
+import { Box, Typography, Grid, Paper, useTheme, Chip } from '@mui/material';
 import { Link as RouterLink } from 'react-router-dom';
 import CategoryIcon from '@mui/icons-material/Category';
 import DevicesIcon from '@mui/icons-material/Devices';
@@ -11,7 +11,6 @@ import SportsIcon from '@mui/icons-material/Sports';
 const CategorySection = ({ categories = [], isSmallScreen }) => {
   console.log('CategorySection received categories:', categories);
 
-  // Ensure categories is an array
   const validCategories = Array.isArray(categories) ? categories : [];
   console.log('Valid categories array:', validCategories);
 
@@ -28,17 +27,16 @@ const CategorySection = ({ categories = [], isSmallScreen }) => {
   const theme = useTheme();
 
   return (
-    <Box sx={{ mb: { xs: 4, md: 6 }, mt: { xs: 5, md: 7 } }}>
+    <Box sx={{ mb: { xs: 3, md: 4 }, mt: { xs: 4, md: 5 } }}>
+      {/* Updated Elegant Header */}
       <Box sx={{ 
         display: 'flex', 
         alignItems: 'center', 
         mb: 3,
-        borderBottom: '2px solid',
-        borderColor: 'primary.light',
-        pb: 1
+        px: { xs: 2, sm: 2 }
       }}>
         <Typography
-          variant="h3"
+          variant="h4"
           sx={{
             textDecoration: 'none',
             color: 'inherit',
@@ -46,96 +44,167 @@ const CategorySection = ({ categories = [], isSmallScreen }) => {
             letterSpacing: 0.5,
             display: 'flex',
             alignItems: 'center',
-            fontSize: { xs: '1.8rem', sm: '2.2rem', md: '2.8rem', lg: '3rem' } // Adjust sizes
+            fontSize: { xs: '1.5rem', sm: '1.8rem', md: '2.2rem' },
+            position: 'relative',
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              bottom: -12,
+              left: 0,
+              width: '100%',
+              height: '2px',
+              backgroundColor: theme.palette.primary.light,
+              borderRadius: '1px'
+            },
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              bottom: -12,
+              left: 0,
+              width: '60px',
+              height: '2px',
+              backgroundColor: theme.palette.secondary.main,
+              borderRadius: '1px',
+              zIndex: 1
+            }
           }}
         >
           Shop By
-          <Box component="span" sx={{ color: theme.palette.secondary.main }}>
+          <Box 
+            component="span" 
+            sx={{ 
+              color: theme.palette.secondary.main, 
+              ml: 1,
+              fontWeight: 700
+            }}
+          >
             Category
           </Box>
         </Typography>
       </Box>
 
       {validCategories.length > 0 ? (
-        <Grid container spacing={2}>
-          {validCategories.map((category) => {
-            if (!category) return null;
-            const IconComponent = getCategoryIcon(category.name);
-            
-            return (
-              <Grid item xs={6} sm={4} md={3} key={category.id || Math.random()}>
-                <Paper
-                  component={RouterLink}
-                  to={`/category/${category.slug}`}
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: { xs: 140, sm: 160, md: 180 },
-                    textDecoration: 'none',
-                    color: 'inherit',
-                    transition: 'all 0.3s ease',
-                    '&:hover': {
-                      transform: 'translateY(-8px)',
-                      boxShadow: (theme) => theme.shadows[8],
-                      '& .category-icon': {
-                        color: 'primary.main',
-                        transform: 'scale(1.1)',
-                      }
-                    },
-                    padding: 2,
-                  }}
-                >
-                  <Box
-                    className="category-icon"
+        <Box sx={{ px: { xs: 2, sm: 2 } }}>
+          <Grid container spacing={1.5}>
+            {validCategories.map((category) => {
+              if (!category) return null;
+              const IconComponent = getCategoryIcon(category.name);
+              
+              return (
+                <Grid item xs={6} sm={4} md={3} lg={2} key={category.id || Math.random()}>
+                  <Paper
+                    component={RouterLink}
+                    to={`/category/${category.slug}`}
+                    elevation={2}
                     sx={{
-                      backgroundColor: 'primary.light',
-                      borderRadius: '50%',
-                      p: 2,
-                      mb: 2,
-                      transition: 'all 0.3s ease',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      height: { xs: 80, sm: 90 },
+                      textDecoration: 'none',
+                      color: 'inherit',
+                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                      borderRadius: 2,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      background: `linear-gradient(135deg, ${theme.palette.background.paper} 0%, ${theme.palette.grey[50]} 100%)`,
+                      border: `1px solid ${theme.palette.divider}`,
+                      '&:hover': {
+                        transform: 'translateY(-4px)',
+                        boxShadow: theme.shadows[6],
+                        borderColor: theme.palette.primary.light,
+                        '& .category-icon': {
+                          color: theme.palette.primary.main,
+                          transform: 'scale(1.15)',
+                        },
+                        '& .category-name': {
+                          color: theme.palette.primary.main,
+                        }
+                      },
+                      '&:active': {
+                        transform: 'translateY(-2px)',
+                      },
+                      padding: 1.5,
                     }}
                   >
-                    <IconComponent 
-                      sx={{ 
-                        fontSize: { xs: 32, sm: 40 },
-                        color: 'white'
-                      }} 
-                    />
-                  </Box>
-                  
-                  <Typography 
-                    variant="h6" 
-                    component="h3"
-                    align="center"
-                    sx={{ 
-                      fontSize: { xs: '1rem', sm: '1.25rem' },
-                      fontWeight: 500
-                    }}
-                  >
-                    {category.name}
-                  </Typography>
-                  
-                  {category.product_count !== undefined && (
-                    <Typography 
-                      variant="body2" 
-                      color="text.secondary"
-                      align="center"
-                      sx={{ mt: 0.5 }}
+                    <Box
+                      className="category-icon"
+                      sx={{
+                        backgroundColor: theme.palette.primary.main,
+                        borderRadius: '50%',
+                        p: 1,
+                        mb: 1,
+                        transition: 'all 0.2s ease',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: theme.shadows[2],
+                      }}
                     >
-                      {category.product_count} Products
+                      <IconComponent 
+                        sx={{ 
+                          fontSize: { xs: 18, sm: 20 },
+                          color: 'white'
+                        }} 
+                      />
+                    </Box>
+                    
+                    <Typography 
+                      className="category-name"
+                      variant="body2" 
+                      component="h3"
+                      align="center"
+                      sx={{ 
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        fontWeight: 600,
+                        lineHeight: 1.2,
+                        transition: 'color 0.2s ease',
+                        mb: 0.5
+                      }}
+                    >
+                      {category.name}
                     </Typography>
-                  )}
-                </Paper>
-              </Grid>
-            );
-          })}
-        </Grid>
+                    
+                    {category.product_count !== undefined && (
+                      <Chip
+                        label={`${category.product_count}`}
+                        size="small"
+                        sx={{ 
+                          height: 16,
+                          fontSize: '0.65rem',
+                          fontWeight: 500,
+                          backgroundColor: theme.palette.grey[100],
+                          color: theme.palette.text.secondary,
+                          '& .MuiChip-label': {
+                            px: 1
+                          }
+                        }}
+                      />
+                    )}
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Box>
       ) : (
-        <Typography variant="body1" align="center" sx={{ py: 4 }}>
-          No categories available
-        </Typography>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            py: 4,
+            backgroundColor: theme.palette.grey[50],
+            borderRadius: 2,
+            border: `1px dashed ${theme.palette.grey[300]}`,
+            mx: 2
+          }}
+        >
+          <Typography variant="body1" color="text.secondary">
+            No categories available
+          </Typography>
+        </Box>
       )}
     </Box>
   );

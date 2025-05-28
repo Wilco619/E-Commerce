@@ -877,8 +877,22 @@ class CartViewSet(viewsets.ModelViewSet):
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class OrderViewSet(viewsets.ModelViewSet):
-    queryset = Order.objects.all()
+    permission_classes = [IsAuthenticated]
     serializer_class = OrderSerializer
+
+    def get_queryset(self):
+        return Order.objects.filter(user=self.request.user)
+
+    def retrieve(self, request, *args, **kwargs):
+        try:
+            order = self.get_queryset().get(pk=kwargs['pk'])
+            serializer = self.get_serializer(order)
+            return Response(serializer.data)
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Order not found or you do not have permission to view it'},
+                status=status.HTTP_404_NOT_FOUND
+            )
 
     @action(detail=True, methods=['put', 'patch'], url_path='update_status')
     def update_status(self, request, pk=None):
